@@ -10,4 +10,6 @@ Project names/paths, task text, attachments and worker results are sent to your 
 
 Attachment copies and integrity metadata are stored on the daemon host under `~/.paseo-multi-project/attachments`, outside project repositories. Copies are never pruned automatically; removed drafts and failed launches still leave copies, as do task archival and plugin removal. Deleting a copy referenced by a coordinator, including an archived one, makes that task's attachment tool and launch retries fail. Original files are preserved. See the [README's data and scope guidance](https://github.com/ChrisLauinger77/paseo-multi-project#data-and-scope) for storage configuration and deletion guidance.
 
+Failed launches retain your input for retry. After a confirmed coordinator creation failure, the plugin attempts to archive its verified empty Local context workspace; uncertain outcomes preserve the workspace. Project files and managed worktrees are preserved.
+
 Permissions remain user decisions. Worktree creation does not fall back to Local on failure. Keep the plugin enabled while its coordinators are active. The plugin does not migrate running tasks from a custom Paseo fork.
