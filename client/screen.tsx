@@ -10,6 +10,7 @@ import { ArchiveTask } from "./archive-task";
 import { ProjectPicker } from "./project-picker";
 import { TaskAttachments } from "./attachments";
 import { TaskSettings } from "./task-settings";
+import { createTaskRefresh } from "./task-refresh";
 
 export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const [form] = useState(createTaskForm);
@@ -46,6 +47,9 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   useEffect(() => {
     const lifetime = new AbortController();
     let release: (() => Promise<void>) | undefined;
+    const refresh = createTaskRefresh(() => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    });
     setWatchError(null);
     void paseo.agents
       .list({ subscribe: {}, signal: lifetime.signal })
@@ -56,12 +60,8 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         }
         release = () => subscription!.release();
         subscription!.subscribe({
-          snapshot: () => {
-            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          },
-          update: () => {
-            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          },
+          snapshot: refresh.snapshot,
+          update: refresh.update,
           error: (error) => setWatchError(String(error)),
         });
       })
@@ -71,6 +71,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
       });
     return () => {
       lifetime.abort();
+      refresh.dispose();
       void release?.();
     };
   }, [paseo, queryClient, watchVersion]);
