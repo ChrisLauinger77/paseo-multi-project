@@ -92,6 +92,7 @@ export function createTaskForm() {
           attempt = { fingerprint, request: { ...input, id } };
         }
         const result = await client.launch(attempt.request);
+        attempt = undefined;
         publish({ pending: false, result });
         return result;
       } catch (error) {

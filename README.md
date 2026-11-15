@@ -47,7 +47,7 @@ Use this plugin action for the worker choice. Paseo 0.15.4 does not expose a plu
 
 The coordinator uses Paseo tools to prepare targets and start children; it does not change repositories itself. Worktree failures stay failures. Permission requests remain pending user actions in Paseo; the plugin never grants them. The coordinator's final answer is the consolidated result in its ordinary chat.
 
-A failed launch keeps the input and attachment references and shows an error. An unchanged retry reuses the daemon's creation identities while the form remains open. If you reload after an ambiguous failure, check Recent tasks before starting again: an already-created coordinator may be there.
+A failed launch keeps the input and attachment references and shows an error. After a failed attempt, an unchanged retry reuses the daemon's creation identities while the form remains open. If you reload after an ambiguous failure, check Recent tasks before starting again: an already-created coordinator may be there.
 
 ## Existing fork users
 

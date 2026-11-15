@@ -70,6 +70,23 @@ it("blocks duplicate submission and edits during pending creation", async () => 
   expect(f.getState().pending).toBe(false);
 });
 
+it("prepares a new identity for unchanged input after each successful launch", async () => {
+  const f = ready();
+  let preparations = 0;
+  const ids: string[] = [];
+  const client = {
+    prepare: async () => ({ id: `launch-${++preparations}` }),
+    launch: async (request: { id: string }) => {
+      ids.push(request.id);
+      return { agentId: request.id, workspaceId: "workspace" };
+    },
+  };
+  await f.submit(client);
+  await f.submit(client);
+  expect(preparations).toBe(2);
+  expect(ids).toEqual(["launch-1", "launch-2"]);
+});
+
 it("allows choosing Worktree before selecting Git projects", () => {
   const f = createTaskForm();
   f.setIsolation("worktree");
