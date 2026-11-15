@@ -131,6 +131,7 @@ test("real Codex coordinates two temporary projects on stock Paseo", async () =>
       .invokePluginRpc("paseo-multi-project", launchRpc.name, input)
       .then((value) => {
         const launched = launchRpc.output.parse(value);
+        if ("retryWithNewIdentity" in launched) throw new Error(launched.error);
         console.info(`Real provider smoke: coordinator ${launched.agentId}`);
         return launched;
       });

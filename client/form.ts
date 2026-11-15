@@ -1,4 +1,10 @@
-import type { TaskAgentConfig, TaskLaunch, TaskProject, TaskAttachment } from "../shared/contracts";
+import type {
+  TaskAgentConfig,
+  TaskLaunch,
+  TaskLaunchResult,
+  TaskProject,
+  TaskAttachment,
+} from "../shared/contracts";
 export interface TaskFormState {
   task: string;
   attachments: TaskAttachment[];
@@ -66,7 +72,7 @@ export function createTaskForm() {
     },
     async submit(client: {
       prepare(): Promise<{ id: string }>;
-      launch(input: TaskLaunch): Promise<{ agentId: string; workspaceId: string }>;
+      launch(input: TaskLaunch): Promise<TaskLaunchResult>;
     }) {
       if (
         state.pending ||
@@ -92,6 +98,11 @@ export function createTaskForm() {
           attempt = { fingerprint, request: { ...input, id } };
         }
         const result = await client.launch(attempt.request);
+        if ("retryWithNewIdentity" in result) {
+          attempt = undefined;
+          publish({ pending: false, error: result.error });
+          return null;
+        }
         attempt = undefined;
         publish({ pending: false, result });
         return result;

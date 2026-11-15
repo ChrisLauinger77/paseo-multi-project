@@ -43,6 +43,7 @@ export async function fixture(
   const launches: Array<{ config: AgentSessionConfig; context?: AgentLaunchContext }> = [];
   const notifications: string[] = [];
   const firstPrompt = deferred<AgentPromptInput>();
+  const sessionFailures = { remaining: 0 };
   const attachmentDirectory = path.join(root, "plugin-attachments");
   function recordNotification(prompt: unknown) {
     const text = typeof prompt === "string" ? prompt : JSON.stringify(prompt);
@@ -81,6 +82,10 @@ export async function fixture(
     capabilities: { ...inner.capabilities, supportsNativePaseoTools: native },
     async createSession(config, context, options) {
       launches.push({ config, context });
+      if (config.title === "FAIL_COORDINATOR_START" && sessionFailures.remaining > 0) {
+        sessionFailures.remaining--;
+        throw new Error("Test provider rejected coordinator startup");
+      }
       return inner.createSession(config, context, options);
     },
     async resumeSession(handle, config, context, options) {
@@ -161,7 +166,9 @@ export async function fixture(
     const rpc = async (method: string, input: unknown) =>
       driver!.invokePluginRpc("paseo-multi-project", method, input);
     async function launch(input: TaskLaunch = request) {
-      return launchRpc.output.parse(await rpc(launchRpc.name, launchSchema.parse(input)));
+      const result = launchRpc.output.parse(await rpc(launchRpc.name, launchSchema.parse(input)));
+      if ("retryWithNewIdentity" in result) throw new Error(result.error);
+      return result;
     }
     async function tools(agentId: string) {
       if (native) {
@@ -190,6 +197,7 @@ export async function fixture(
       root,
       attachmentDirectory,
       firstPrompt,
+      sessionFailures,
       daemon,
       driver,
       paseo,
