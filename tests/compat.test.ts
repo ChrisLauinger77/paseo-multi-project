@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { fixture, TASK_LABEL, deferred } from "./fixture";
+import { fixture, TASK_LABEL, PLUGIN_LABEL, deferred } from "./fixture";
 import {
   DISCOVERY_TOOL,
   ATTACHMENTS_TOOL,
@@ -14,6 +14,29 @@ import { AttachmentStore } from "../server/attachments";
 import { access, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { archiveTask } from "../server/archive";
+
+test("opens coordinators with invalid input and their children", async () => {
+  const f = await fixture(true);
+  try {
+    const workspace = await f.paseo.workspaces.create({
+      source: { kind: "directory", path: f.request.projects[0]!.projectRootPath },
+    });
+    const coordinator = await workspace.agents.create({
+      config: { provider: "codex/gpt-5.4-mini" },
+      labels: { [PLUGIN_LABEL]: "true", [INPUT_LABEL]: "invalid JSON" },
+    });
+    const tools = await f.tools(coordinator.id);
+    expect(tools.names()).toContain(DISCOVERY_TOOL);
+    expect(tools.names()).not.toContain(ATTACHMENTS_TOOL);
+    const child = await workspace.agents.create({
+      config: { provider: "codex/gpt-5.4-mini" },
+      parent: coordinator.id,
+    });
+    expect((await f.tools(child.id)).names()).not.toContain(ATTACHMENTS_TOOL);
+  } finally {
+    await f.close();
+  }
+}, 60000);
 
 test.each([false, true])(
   "stock 0.15.4 plugin orchestration over native=%s",
