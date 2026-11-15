@@ -30,7 +30,7 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "test": "vitest run",
-    "test:unit": "vitest run client/form.test.ts server/projects.test.ts --bail=1",
+    "test:unit": "vitest run client server --bail=1",
     "test:compat": "vitest run tests/compat.test.ts --bail=1",
     "test:browser": "playwright test",
     "test:real": "vitest run --config vitest.real.config.ts --bail=1"
