@@ -81,7 +81,13 @@ export function TaskAttachments({
     onStatus(true);
     try {
       if (files.length >= MAX_ATTACHMENTS) throw new Error("Attach up to 8 files per task.");
-      const file = await importFile({ path: hostPath.trim() });
+      const remaining =
+        MAX_TASK_ATTACHMENT_BYTES - files.reduce((total, file) => total + file.size, 0);
+      if (remaining <= 0) throw new Error("Attachments must total 20 MiB or less.");
+      const file = await importFile({
+        path: hostPath.trim(),
+        maxBytes: Math.min(remaining, MAX_ATTACHMENT_BYTES),
+      });
       validate([file]);
       onChange([...files, file]);
       setHostPath("");

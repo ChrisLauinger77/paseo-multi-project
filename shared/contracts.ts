@@ -57,7 +57,10 @@ export const uploadAttachmentRpc = defineRpc({
 });
 export const importAttachmentRpc = defineRpc({
   name: "attachments.import",
-  input: z.object({ path: z.string().min(1).max(4096) }),
+  input: z.object({
+    path: z.string().min(1).max(4096),
+    maxBytes: z.number().int().positive().max(MAX_ATTACHMENT_BYTES).optional(),
+  }),
   output: attachmentSchema,
 });
 

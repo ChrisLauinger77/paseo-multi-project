@@ -57,13 +57,16 @@ export class AttachmentStore {
     return file;
   }
 
-  async importFile(filePath: string): Promise<TaskAttachment> {
+  async importFile(filePath: string, maxBytes = MAX_ATTACHMENT_BYTES): Promise<TaskAttachment> {
     const expanded = filePath.replace(/^~(?=[\\/])/, homedir());
     if (!path.isAbsolute(expanded)) throw new Error("Enter an absolute file path on this host.");
     const info = await stat(expanded);
     if (!info.isFile()) throw new Error("Choose a file, not a directory.");
     if (info.size > MAX_ATTACHMENT_BYTES)
       throw new Error("Each attachment must be 5 MiB or smaller.");
+    const limit = Math.min(maxBytes, MAX_ATTACHMENT_BYTES);
+    if (info.size > limit)
+      throw new Error("The file exceeds the remaining task attachment budget.");
     const mimeTypes: Record<string, string> = {
       ".png": "image/png",
       ".jpg": "image/jpeg",
@@ -78,6 +81,9 @@ export class AttachmentStore {
       ".csv": "text/csv",
     };
     const bytes = await readFile(expanded);
+    // A file can grow after stat; do not store a copy that exceeds the supplied budget.
+    if (bytes.length > limit)
+      throw new Error("The file exceeds the remaining task attachment budget.");
     return this.upload({
       fileName: path.basename(expanded),
       mimeType: mimeTypes[path.extname(expanded).toLowerCase()] || "application/octet-stream",

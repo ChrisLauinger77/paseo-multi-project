@@ -19,7 +19,7 @@ import { readCatalog, readFeatures } from "./server/catalog";
 export default function contribute(server: PluginServerContext) {
   const attachments = new AttachmentStore();
   server.handle(uploadAttachmentRpc, (input) => attachments.upload(input));
-  server.handle(importAttachmentRpc, (input) => attachments.importFile(input.path));
+  server.handle(importAttachmentRpc, (input) => attachments.importFile(input.path, input.maxBytes));
   server.handle(prepareRpc, () => ({ id: randomUUID() }));
   server.handle(catalogRpc, (_input, { paseo }) => readCatalog(paseo));
   server.handle(featuresRpc, (input, { paseo }) => readFeatures(input, paseo));

@@ -11,7 +11,7 @@ import {
 } from "../shared/contracts";
 import { readFileSync } from "node:fs";
 import { AttachmentStore } from "../server/attachments";
-import { access, writeFile, readFile } from "node:fs/promises";
+import { access, writeFile, readFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { archiveTask } from "../server/archive";
 
@@ -533,6 +533,29 @@ test.each([false, true])(
   },
   60000,
 );
+
+test("rejects host imports above the remaining budget without leaving a stored directory", async () => {
+  const f = await fixture();
+  try {
+    await mkdir(f.attachmentDirectory, { recursive: true });
+    const hostPath = path.join(f.root, "requirements.txt");
+    await writeFile(hostPath, "Task requirements");
+    const before = await readdir(f.attachmentDirectory);
+    await expect(f.rpc("attachments.import", { path: hostPath, maxBytes: 1 })).rejects.toThrow(
+      "remaining task attachment budget",
+    );
+    for (const maxBytes of [0, -1, 1.5, MAX_ATTACHMENT_BYTES + 1])
+      await expect(f.rpc("attachments.import", { path: hostPath, maxBytes })).rejects.toThrow();
+    expect(await readdir(f.attachmentDirectory)).toEqual(before);
+    const imported = attachmentSchema.parse(
+      await f.rpc("attachments.import", { path: hostPath, maxBytes: 17 }),
+    );
+    expect(imported.size).toBe(17);
+    expect(await readdir(f.attachmentDirectory)).toEqual([imported.id]);
+  } finally {
+    await f.close();
+  }
+}, 60000);
 
 test("rejects bad or missing attachments before starting an agent", async () => {
   const f = await fixture();
