@@ -4,13 +4,14 @@ import {
   DISCOVERY_TOOL,
   ATTACHMENTS_TOOL,
   tasksRpc,
+  archiveRpc,
   attachmentSchema,
   INPUT_LABEL,
   MAX_ATTACHMENT_BYTES,
 } from "../shared/contracts";
 import { readFileSync } from "node:fs";
 import { AttachmentStore } from "../server/attachments";
-import { writeFile, readFile } from "node:fs/promises";
+import { access, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { archiveTask } from "../server/archive";
 
@@ -182,9 +183,14 @@ test("a clean distributable loads without the plugin's development node_modules"
   }
 }, 60000);
 
-test.each([false, true])(
-  "archives a coordinator with archiveWorkers=%s without touching unrelated agents or projects",
-  async (archiveWorkers) => {
+test.each([
+  [false, undefined],
+  [true, undefined],
+  [false, true],
+  [true, true],
+])(
+  "archives a coordinator with archiveWorkers=%s, archiveEmptyWorkspaces=%s without touching unrelated agents or projects",
+  async (archiveWorkers, archiveEmptyWorkspaces) => {
     const f = await fixture();
     try {
       const coordinator = await f.launch();
@@ -214,11 +220,12 @@ test.each([false, true])(
         title: "Nested worker",
       });
       const unrelated = await otherWorkspace.agents.create({ config, title: "Unrelated agent" });
-      const input = { agentId: coordinator.agentId, archiveWorkers };
+      const input = { agentId: coordinator.agentId, archiveWorkers, archiveEmptyWorkspaces };
       await expect(
         f.rpc("tasks.archive", { agentId: unrelated.id, archiveWorkers: true }),
       ).rejects.toThrow("coordinator");
-      await f.rpc("tasks.archive", input);
+      const result = archiveRpc.output.parse(await f.rpc("tasks.archive", input));
+      expect(result.workspaceCleanupErrors || []).toEqual([]);
       await f.rpc("tasks.archive", input);
       expect((await f.paseo.agents.ref(coordinator.agentId).refresh())!.agent.archivedAt).toEqual(
         expect.any(String),
@@ -233,8 +240,118 @@ test.each([false, true])(
         expect((await nested.refresh())!.agent.labels["paseo.parent-agent-id"]).toBe(remote.id);
       }
       expect((await unrelated.refresh())!.agent.archivedAt).toBeNull();
+      if (archiveWorkers && archiveEmptyWorkspaces) expect(await ownWorkspace.refresh()).toBeNull();
+      else expect(await ownWorkspace.refresh()).not.toBeNull();
+      expect(await otherWorkspace.refresh()).not.toBeNull();
+      for (const project of f.projects) await access(project.projectRootPath);
       expect((await f.paseo.projects.list()).projects).toHaveLength(f.projects.length);
       expect(tasksRpc.output.parse(await f.rpc(tasksRpc.name, {})).tasks).toEqual([]);
+    } finally {
+      await f.close();
+    }
+  },
+  60000,
+);
+
+test("cleans empty task Local workspaces while preserving worktrees, terminals and unrelated empty workspaces", async () => {
+  const f = await fixture();
+  try {
+    const coordinator = await f.launch();
+    const project = f.request.projects[1]!;
+    const source = {
+      kind: "directory" as const,
+      path: project.projectRootPath,
+      projectId: project.projectId,
+    };
+    const local = await f.paseo.workspaces.create({ source });
+    const occupied = await f.paseo.workspaces.create({ source });
+    const unrelated = await f.paseo.workspaces.create({ source });
+    const created = await (
+      await f.tools(coordinator.agentId)
+    ).invoke("create_workspace", {
+      projectId: project.projectId,
+      path: project.projectRootPath,
+      isolation: "worktree",
+    });
+    expect(created.isError).not.toBe(true);
+    const managed = f.paseo.workspaces.ref(
+      (created.structuredContent as { workspaceId: string }).workspaceId,
+    );
+    const managedDirectory = (await managed.refresh())!.workspaceDirectory;
+    const localFile = path.join(project.projectRootPath, "keep-local.txt");
+    const managedFile = path.join(managedDirectory, "keep-worktree.txt");
+    await writeFile(localFile, "Local changes");
+    await writeFile(managedFile, "Worktree changes");
+    let parent = coordinator.agentId;
+    for (const workspace of [managed, local, occupied]) {
+      const worker = await workspace.agents.create({
+        config: { provider: "codex/gpt-5.4-mini" },
+        parent,
+      });
+      parent = worker.id;
+    }
+    const terminal = await occupied.terminals.create({ command: "sleep", args: ["300"] });
+    const result = archiveRpc.output.parse(
+      await f.rpc(archiveRpc.name, {
+        agentId: coordinator.agentId,
+        archiveWorkers: true,
+        archiveEmptyWorkspaces: true,
+      }),
+    );
+    expect(result.workspaceCleanupErrors).toEqual([]);
+    expect(await f.paseo.workspaces.ref(coordinator.workspaceId).refresh()).toBeNull();
+    expect(await local.refresh()).toBeNull();
+    for (const workspace of [managed, occupied, unrelated])
+      expect(await workspace.refresh()).not.toBeNull();
+    expect((await occupied.terminals.list()).entries.map((entry) => entry.id)).toContain(
+      terminal.id,
+    );
+    expect(await readFile(localFile, "utf8")).toBe("Local changes");
+    expect(await readFile(managedFile, "utf8")).toBe("Worktree changes");
+  } finally {
+    await f.close();
+  }
+}, 60000);
+
+test.each([false, true])(
+  "reports optional cleanup failure without failing task archival, payload error=%s",
+  async (payloadError) => {
+    const f = await fixture();
+    try {
+      const coordinator = await f.launch();
+      const interrupted = {
+        ...f.paseo,
+        workspaces: {
+          ...f.paseo.workspaces,
+          ref(input: Parameters<typeof f.paseo.workspaces.ref>[0]) {
+            const workspace = f.paseo.workspaces.ref(input);
+            return {
+              ...workspace,
+              archive: async () => {
+                if (!payloadError) throw new Error("Connection lost");
+                return {
+                  requestId: "cleanup-failure",
+                  workspaceId: workspace.id,
+                  archivedAt: null,
+                  error: "Connection lost",
+                };
+              },
+            };
+          },
+        },
+      };
+      const input = {
+        agentId: coordinator.agentId,
+        archiveWorkers: true,
+        archiveEmptyWorkspaces: true,
+      };
+      const result = await archiveTask(input, interrupted);
+      expect(result.archivedAt).toEqual(expect.any(String));
+      expect(result.workspaceCleanupErrors).toEqual([expect.stringContaining("Connection lost")]);
+      expect(await f.paseo.workspaces.ref(coordinator.workspaceId).refresh()).not.toBeNull();
+      const retried = await archiveTask(input, f.paseo);
+      expect(retried.workspaceCleanupErrors).toEqual([]);
+      expect(await f.paseo.workspaces.ref(coordinator.workspaceId).refresh()).toBeNull();
     } finally {
       await f.close();
     }

@@ -89,12 +89,16 @@ function summary(agent: PaseoAgent) {
     workspaceId: agent.workspaceId ?? null,
   };
 }
-export async function listTaskAgents(paseo: PaseoApi) {
+export async function listTaskAgents(
+  paseo: PaseoApi,
+  filter?: { includeArchived?: boolean; includeInternal?: boolean },
+) {
   const agents: PaseoAgent[] = [];
   let cursor: string | undefined;
   do {
     const page = await paseo.agents.list({
       includeBackground: true,
+      ...(filter ? { filter } : {}),
       page: { limit: 200, ...(cursor ? { cursor } : {}) },
     });
     agents.push(...page.entries.map((e) => e.agent));

@@ -159,9 +159,18 @@ export const prepareRpc = defineRpc({
 export type TaskSummary = z.infer<typeof tasksRpc.output>["tasks"][number];
 export const archiveRpc = defineRpc({
   name: "tasks.archive",
-  input: z.object({ agentId: z.string().min(1), archiveWorkers: z.boolean() }),
-  output: z.object({ archivedAt: z.string() }),
+  input: z.object({
+    agentId: z.string().min(1),
+    archiveWorkers: z.boolean(),
+    archiveEmptyWorkspaces: z.boolean().optional(),
+  }),
+  output: z.object({
+    archivedAt: z.string(),
+    workspaceCleanupErrors: z.array(z.string()).optional(),
+  }),
 });
+export type TaskArchive = z.infer<typeof archiveRpc.input>;
+export type TaskArchiveResult = z.infer<typeof archiveRpc.output>;
 
 export type TaskCatalog = z.infer<typeof catalogRpc.output>;
 export type TaskFeatures = z.infer<typeof featuresRpc.output>;

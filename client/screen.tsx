@@ -22,6 +22,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const queryClient = useQueryClient();
   const paseo = usePaseo();
   const [watchError, setWatchError] = useState<string | null>(null);
+  const [archiveErrors, setArchiveErrors] = useState<string[]>([]);
   const [watchVersion, setWatchVersion] = useState(0);
   const catalog = useQuery({ queryKey: ["catalog"], queryFn: () => readCatalog({}), retry: false });
   const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => readTasks({}), retry: false });
@@ -241,6 +242,17 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         </Pressable>
       ) : null}
       <Text style={styles.heading}>Recent tasks</Text>
+      {archiveErrors.length ? (
+        <View style={styles.group} testID="multi-project-workspace-cleanup-error">
+          <Text style={styles.error} accessibilityRole="alert">
+            Task archived. Some empty workspaces could not be archived. Use Paseo's workspace menu
+            to retry. {archiveErrors.join(" ")}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={() => setArchiveErrors([])}>
+            <Text style={styles.link}>Dismiss</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {watchError ? (
         <Text style={styles.error} accessibilityRole="alert">
           Live updates unavailable: {watchError}. Refresh to retry.
@@ -270,7 +282,8 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
           <ArchiveTask
             task={task}
             theme={theme}
-            onArchived={() => {
+            onArchived={(errors) => {
+              setArchiveErrors(errors);
               void tasks.refetch();
             }}
           />

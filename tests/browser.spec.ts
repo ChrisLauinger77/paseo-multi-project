@@ -23,6 +23,8 @@ for (const compact of [false, true]) {
       const featureRequests: unknown[] = [];
       let refreshWaiter: { requestId?: string; done(): void } | undefined;
       let archiveFailureAgentId: string | undefined;
+      let injectCleanupWarning = false;
+      let cleanupRequestId: string | undefined;
       await page.routeWebSocket(/\/ws(?:\?|$)/, (route) => {
         const server = route.connectToServer();
         route.onMessage((data) => {
@@ -41,12 +43,33 @@ for (const compact of [false, true]) {
                 server.send(JSON.stringify(envelope));
                 return;
               }
+              if (message.method === "tasks.archive" && injectCleanupWarning) {
+                cleanupRequestId = message.requestId;
+                injectCleanupWarning = false;
+              }
             }
           }
           server.send(data);
         });
         server.onMessage((data) => {
-          route.send(data);
+          let response = data;
+          if (cleanupRequestId && data.toString().startsWith("{")) {
+            const envelope = JSON.parse(data.toString());
+            const message = findRpc(envelope);
+            if (
+              message?.type === "plugin.rpc.invoke.response" &&
+              message.payload.requestId === cleanupRequestId
+            ) {
+              // Preserve the real archive result and simulate a lost cleanup response.
+              message.payload.output = {
+                ...(message.payload.output as Record<string, unknown>),
+                workspaceCleanupErrors: ["Workspace cleanup response lost."],
+              };
+              cleanupRequestId = undefined;
+              response = JSON.stringify(envelope);
+            }
+          }
+          route.send(response);
           if (refreshWaiter?.requestId && data.toString().includes(refreshWaiter.requestId)) {
             refreshWaiter.done();
             refreshWaiter = undefined;
@@ -267,20 +290,28 @@ for (const compact of [false, true]) {
       });
       await page.getByTestId(`multi-project-archive-${coordinator.id}`).click();
       await expect(page.getByText("Archive task and workers", { exact: true })).toBeVisible();
+      const cleanup = page.getByTestId("multi-project-archive-workspaces").getByRole("switch");
+      await expect(cleanup).not.toBeChecked();
+      await cleanup.click();
+      await expect(cleanup).toBeChecked();
       await page.getByTestId("multi-project-archive-cancel").click();
       await expect(task).toBeVisible();
       expect((await f.paseo.agents.ref(coordinator.id).refresh())!.agent.archivedAt).toBeNull();
       await page.getByTestId(`multi-project-archive-${coordinator.id}`).click();
+      await expect(cleanup).not.toBeChecked();
+      await cleanup.click();
       archiveFailureAgentId = unrelated.id;
       await page.getByTestId("multi-project-archive-confirm").click();
       await expect(page.getByTestId("multi-project-archive-error")).toContainText(
         "not a multi-project task coordinator",
       );
       await expect(page.getByTestId("multi-project-archive-confirm")).toBeEnabled();
+      await expect(cleanup).toBeChecked();
       await page.screenshot({
         path: `artifacts/${compact ? "compact" : "desktop"}-archive.png`,
         fullPage: true,
       });
+      injectCleanupWarning = compact;
       await page
         .getByTestId(compact ? "multi-project-archive-keep" : "multi-project-archive-confirm")
         .click();
@@ -292,18 +323,42 @@ for (const compact of [false, true]) {
         if (compact) expect(snapshot.labels["paseo.parent-agent-id"]).toBeUndefined();
       }
       expect((await unrelated.refresh())!.agent.archivedAt).toBeNull();
+      const cleanupError = page.getByTestId("multi-project-workspace-cleanup-error");
+      if (compact) {
+        await expect(cleanupError).toContainText("Task archived.");
+        await expect(cleanupError).toContainText("Workspace cleanup response lost.");
+        await cleanupError.getByRole("button", { name: "Dismiss" }).click();
+      }
+      await expect(cleanupError).toHaveCount(0);
+      await expect
+        .poll(async () => await f.paseo.workspaces.ref(coordinator.workspaceId!).refresh())
+        .toBeNull();
+      for (const worker of workers) {
+        const workspaceId = (await worker.refresh())!.agent.workspaceId!;
+        const workspace = await f.paseo.workspaces.ref(workspaceId).refresh();
+        if (compact) expect(workspace).not.toBeNull();
+        else expect(workspace).toBeNull();
+      }
     } finally {
       await f.close();
     }
   });
 }
 
-function findRpc(
-  value: unknown,
-): { type: string; method: string; requestId: string; input: { agentId?: string } } | undefined {
+type BrowserRpc =
+  | {
+      type: "plugin.rpc.invoke.request";
+      method: string;
+      requestId: string;
+      input: { agentId?: string };
+    }
+  | { type: "plugin.rpc.invoke.response"; payload: { requestId: string; output: unknown } };
+
+function findRpc(value: unknown): BrowserRpc | undefined {
   if (!value || typeof value !== "object") return;
   const record = value as Record<string, unknown>;
-  if (record.type === "plugin.rpc.invoke.request") return value as ReturnType<typeof findRpc>;
+  if (record.type === "plugin.rpc.invoke.request" || record.type === "plugin.rpc.invoke.response")
+    return value as BrowserRpc;
   for (const child of Object.values(record)) {
     const rpc = findRpc(child);
     if (rpc) return rpc;

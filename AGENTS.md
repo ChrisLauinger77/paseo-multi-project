@@ -7,7 +7,7 @@ Read [docs/architecture.md](docs/architecture.md) for the execution flow and [do
 ## Code map
 
 - `client/screen.tsx` composes the screen and owns SDK subscriptions; `client/form.ts` owns form state and retry identity. Keep browser DOM/file APIs behind the platform checks in `client/web.ts`; native UI uses the host SDK.
-- `server/tasks.ts` validates launches, creates coordinators and derives the task list from agent records. `server/archive.ts` handles task/worker archival through agent APIs.
+- `server/tasks.ts` validates launches, creates coordinators and derives the task list from agent records. `server/archive.ts` handles task/worker archival through agent APIs; `server/workspace-cleanup.ts` handles optional empty Local workspace archival.
 - `server/attachments.ts` owns durable file copies and integrity checks; `server/attachment-tool.ts` supplies task-scoped lookup. `server/discovery.ts` supplies coordinator-only project discovery.
 - `shared/contracts.ts` owns labels, RPC schemas and limits; `shared/prompt.ts` owns the fixed orchestration instructions.
 - `tests/fixture.ts` supplies the isolated stock daemon and typed provider adapter used by compatibility and browser tests.
@@ -19,6 +19,8 @@ Keep task state in Paseo agent records. Never manipulate daemon persistence file
 Preserve daemon-owned idempotency keys for workspace and coordinator creation and reuse an unchanged launch request after an ambiguous failure. Workers use stock agent-scoped `create_agent`, parent links and finish notifications; the coordinator yields after dispatch instead of polling or using provider-native subagents. Worktree failures must not fall back to Local.
 
 Use agent APIs for task archival; project files and managed worktrees must survive. Keep the coordinator available after partial worker failures so users can retry. Keeping workers detaches direct children while preserving their subagent trees.
+
+Optional workspace cleanup must stay off by default and use public workspace APIs only for verified non-managed Local workspaces used by the task. Skip workspaces with active agents, terminals, services or setup. Report cleanup failures separately from successful task archival.
 
 Attachment bytes stay in the plugin-owned store, outside repositories and coordinator labels. Preserve integrity validation before creation, task-scoped tool delivery on session open/resume, and the documented retention policy. Tests must use a temporary attachment directory.
 

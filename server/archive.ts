@@ -1,13 +1,11 @@
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
-import { TASK_LABEL } from "../shared/contracts";
+import { TASK_LABEL, type TaskArchive, type TaskArchiveResult } from "../shared/contracts";
 import { listTaskAgents } from "./tasks";
+import { archiveEmptyWorkspaces } from "./workspace-cleanup";
 
 type PaseoApi = PluginHandlerContext["paseo"];
 
-export async function archiveTask(
-  input: { agentId: string; archiveWorkers: boolean },
-  paseo: PaseoApi,
-) {
+export async function archiveTask(input: TaskArchive, paseo: PaseoApi): Promise<TaskArchiveResult> {
   const coordinator = paseo.agents.ref(input.agentId);
   const snapshot = (await coordinator.refresh())?.agent;
   if (
@@ -16,13 +14,30 @@ export async function archiveTask(
     snapshot.labels["paseo.parent-agent-id"]
   )
     throw new Error("This agent is not a multi-project task coordinator. Refresh the task list.");
-  if (snapshot.archivedAt) return { archivedAt: snapshot.archivedAt };
+  if (snapshot.archivedAt && !input.archiveEmptyWorkspaces)
+    return { archivedAt: snapshot.archivedAt };
 
-  const agents = await listTaskAgents(paseo);
+  const agents = await listTaskAgents(paseo, { includeArchived: true, includeInternal: true });
+  const workspaceIds = new Set<string>();
+  if (input.archiveEmptyWorkspaces) {
+    if (snapshot.workspaceId) workspaceIds.add(snapshot.workspaceId);
+    if (input.archiveWorkers) {
+      const visited = new Set([input.agentId]);
+      function collectWorkspaces(parentId: string) {
+        for (const agent of agents) {
+          if (agent.labels["paseo.parent-agent-id"] !== parentId || visited.has(agent.id)) continue;
+          visited.add(agent.id);
+          if (agent.workspaceId) workspaceIds.add(agent.workspaceId);
+          collectWorkspaces(agent.id);
+        }
+      }
+      collectWorkspaces(input.agentId);
+    }
+  }
   const directWorkers = agents.filter(
     (agent) => !agent.archivedAt && agent.labels["paseo.parent-agent-id"] === input.agentId,
   );
-  if (input.archiveWorkers) {
+  if (!snapshot.archivedAt && input.archiveWorkers) {
     const visited = new Set([input.agentId]);
     async function archiveWorkers(parentId: string): Promise<void> {
       for (const agent of agents) {
@@ -49,7 +64,7 @@ export async function archiveTask(
       }
     }
     await archiveWorkers(input.agentId);
-  } else {
+  } else if (!snapshot.archivedAt) {
     // Detach even same-workspace workers; otherwise stock parent archive archives them.
     for (const agent of directWorkers) {
       const worker = paseo.agents.ref(agent.id);
@@ -63,5 +78,14 @@ export async function archiveTask(
     }
   }
   // Keep the coordinator visible if a worker operation fails partway through.
-  return coordinator.archive();
+  const result = snapshot.archivedAt
+    ? { archivedAt: snapshot.archivedAt }
+    : await coordinator.archive();
+  if (!input.archiveEmptyWorkspaces) return result;
+  // Cleanup is optional and happens only after task archival succeeds. Report failures
+  // separately so the client cannot mistake an archived task for a failed task archive.
+  return {
+    ...result,
+    workspaceCleanupErrors: await archiveEmptyWorkspaces(workspaceIds, paseo),
+  };
 }
