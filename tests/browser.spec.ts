@@ -84,14 +84,18 @@ for (const compact of [false, true]) {
       }
       expect(featureRequests).toEqual([]);
       await expect(page.getByRole("alert")).toHaveCount(0);
+      await page.getByText("Local", { exact: true }).click();
+      await page.getByText("Worktree", { exact: true }).click();
       await page.getByTestId("multi-project-prompt").fill("Coordinate the test repositories");
       for (const p of f.request.projects)
         await page.getByTestId(`multi-project-target-${p.projectId}`).click();
-      await page.getByText("Local", { exact: true }).click();
-      await page.getByText("Worktree", { exact: true }).click();
       const notes = f.projects.find((p) => p.projectKind !== "git")!;
       await page.getByTestId(`multi-project-target-${notes.projectId}`).click();
-      await expect(page.getByText("Isolation: Local", { exact: true })).toBeVisible();
+      await expect(
+        page.getByText("Worktree requires every selected project to be a Git repository.", {
+          exact: true,
+        }),
+      ).toBeVisible();
       await page.getByTestId(`multi-project-target-${notes.projectId}`).click();
       await page.getByText("Select a provider", { exact: true }).click();
       await page.getByText("Codex", { exact: true }).click();

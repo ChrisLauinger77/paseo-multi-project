@@ -79,8 +79,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const missing = state.projects.some(
     (p) => !projects.some((current) => current.projectId === p.projectId),
   );
-  const canWorktree =
-    state.projects.length > 0 && state.projects.every((p) => p.projectKind === "git");
+  const canWorktree = state.projects.every((p) => p.projectKind === "git");
   const canSubmit =
     !state.pending &&
     Boolean(state.task.trim() && state.projects.length && state.config && selectedModel) &&
@@ -223,20 +222,21 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
             </Pressable>
           ))}
       </View>
-      {canWorktree ? (
-        <SettingsSelect
-          label="Isolation"
-          value={state.isolation}
-          options={[
-            { value: "local", label: "Local" },
-            { value: "worktree", label: "Worktree" },
-          ]}
-          onValueChange={form.setIsolation}
-          disabled={state.pending}
-        />
-      ) : (
-        <Text style={styles.muted}>Isolation: Local</Text>
-      )}
+      <SettingsSelect
+        label="Isolation"
+        hint={
+          !canWorktree
+            ? "Worktree requires every selected project to be a Git repository."
+            : undefined
+        }
+        value={state.isolation}
+        options={[
+          { value: "local", label: "Local" },
+          { value: "worktree", label: "Worktree" },
+        ]}
+        onValueChange={form.setIsolation}
+        disabled={state.pending || !canWorktree}
+      />
       <SettingsSelect
         label="Provider"
         value={state.config?.provider || ""}

@@ -69,3 +69,10 @@ it("blocks duplicate submission and edits during pending creation", async () => 
   await pending;
   expect(f.getState().pending).toBe(false);
 });
+
+it("allows choosing Worktree before selecting Git projects", () => {
+  const f = createTaskForm();
+  f.setIsolation("worktree");
+  f.toggleProject(project);
+  expect(f.getState().isolation).toBe("worktree");
+});
