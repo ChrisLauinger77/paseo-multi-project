@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fixture } from "./fixture";
+import { fixture, deferred } from "./fixture";
 import { TASK_LABEL } from "../shared/contracts";
 import { mkdir } from "node:fs/promises";
 
@@ -14,6 +14,31 @@ for (const compact of [false, true]) {
       );
       const serverId = f.daemon.daemon.getServerId();
       const endpoint = `127.0.0.1:${f.daemon.port}`;
+      const featureRequests: unknown[] = [];
+      let refreshWaiter: { requestId?: string; done(): void } | undefined;
+      await page.routeWebSocket(/\/ws(?:\?|$)/, (route) => {
+        const server = route.connectToServer();
+        route.onMessage((data) => {
+          const text = data.toString();
+          if (text.startsWith("{")) {
+            const envelope = JSON.parse(text);
+            const message = findRpc(envelope);
+            if (message?.type === "plugin.rpc.invoke.request") {
+              if (message.method === "features.read") featureRequests.push(message.input);
+              if (message.method === "catalog.read" && refreshWaiter)
+                refreshWaiter.requestId = message.requestId;
+            }
+          }
+          server.send(data);
+        });
+        server.onMessage((data) => {
+          route.send(data);
+          if (refreshWaiter?.requestId && data.toString().includes(refreshWaiter.requestId)) {
+            refreshWaiter.done();
+            refreshWaiter = undefined;
+          }
+        });
+      });
       await page.addInitScript(
         ({ serverId, endpoint }) => {
           const connection = { id: `direct:${endpoint}`, type: "directTcp", endpoint };
@@ -40,6 +65,25 @@ for (const compact of [false, true]) {
       const url = `http://${endpoint}/h/${serverId}/plugin/paseo-multi-project/surface/tasks`;
       await page.goto(url);
       await expect(page.getByTestId("multi-project-screen")).toBeVisible();
+      const refreshed = deferred();
+      refreshWaiter = { done: () => refreshed.resolve() };
+      await page.getByTestId("multi-project-refresh").click();
+      let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          refreshed.promise,
+          new Promise<never>((_, reject) => {
+            refreshTimer = setTimeout(
+              () => reject(new Error("Refresh catalog response not observed")),
+              5000,
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(refreshTimer);
+      }
+      expect(featureRequests).toEqual([]);
+      await expect(page.getByRole("alert")).toHaveCount(0);
       await page.getByTestId("multi-project-prompt").fill("Coordinate the test repositories");
       for (const p of f.request.projects)
         await page.getByTestId(`multi-project-target-${p.projectId}`).click();
@@ -74,4 +118,16 @@ for (const compact of [false, true]) {
       await f.close();
     }
   });
+}
+
+function findRpc(
+  value: unknown,
+): { type: string; method: string; requestId: string; input: { agentId?: string } } | undefined {
+  if (!value || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  if (record.type === "plugin.rpc.invoke.request") return value as ReturnType<typeof findRpc>;
+  for (const child of Object.values(record)) {
+    const rpc = findRpc(child);
+    if (rpc) return rpc;
+  }
 }

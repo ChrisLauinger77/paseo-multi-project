@@ -9,7 +9,7 @@ import {
   SettingsSelect,
   SettingsSwitch,
 } from "@getpaseo/plugin/client/ui";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { catalogRpc, featuresRpc, launchRpc, prepareRpc, tasksRpc } from "../shared/contracts";
 import { createTaskForm } from "./form";
 
@@ -31,6 +31,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const selectedProvider = catalog.data?.providers.find((p) => p.id === state.config?.provider);
   const selectedModel = selectedProvider?.models.find((m) => m.id === state.config?.model);
   const cwd = state.projects[0]?.projectRootPath || "";
+  const featureInput = state.config && cwd ? { config: state.config, cwd } : null;
   const features = useQuery({
     queryKey: [
       "features",
@@ -40,8 +41,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
       state.config?.thinkingOptionId,
       cwd,
     ],
-    queryFn: () => readFeatures({ config: state.config!, cwd }),
-    enabled: Boolean(state.config && cwd),
+    queryFn: featureInput ? () => readFeatures(featureInput) : skipToken,
     retry: false,
   });
   useEffect(() => {
@@ -142,7 +142,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   function refresh() {
     void catalog.refetch();
     void tasks.refetch();
-    void features.refetch();
+    if (featureInput) void features.refetch();
     setWatchVersion((v) => v + 1);
   }
   async function submit() {
@@ -329,7 +329,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
           />
         ),
       )}
-      {features.error ? (
+      {featureInput && features.error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {features.error.message}
         </Text>
