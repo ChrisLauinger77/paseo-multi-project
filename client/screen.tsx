@@ -25,8 +25,14 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const [watchError, setWatchError] = useState<string | null>(null);
   const [archiveErrors, setArchiveErrors] = useState<string[]>([]);
   const [watchVersion, setWatchVersion] = useState(0);
+  const [watchReady, setWatchReady] = useState(false);
   const catalog = useQuery({ queryKey: ["catalog"], queryFn: () => readCatalog({}), retry: false });
-  const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => readTasks({}), retry: false });
+  const tasks = useQuery({
+    queryKey: ["tasks"],
+    queryFn: () => readTasks({}),
+    enabled: watchReady,
+    retry: false,
+  });
   const projects = catalog.data?.projects || [];
   const selectedProvider = catalog.data?.providers.find((p) => p.id === state.config?.provider);
   const selectedModel = selectedProvider?.models.find((m) => m.id === state.config?.model);
@@ -51,6 +57,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     });
     setWatchError(null);
+    setWatchReady(false);
     void paseo.agents
       .list({ subscribe: {}, signal: lifetime.signal })
       .then(async ({ subscription }) => {
@@ -64,10 +71,15 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
           update: refresh.update,
           error: (error) => setWatchError(String(error)),
         });
+        // The first task read follows the observation, closing the initial snapshot gap.
+        setWatchReady(true);
       })
       .catch((error) => {
-        if (!lifetime.signal.aborted)
+        if (!lifetime.signal.aborted) {
           setWatchError(error instanceof Error ? error.message : String(error));
+          // Still allow a task read when live observation is unavailable.
+          setWatchReady(true);
+        }
       });
     return () => {
       lifetime.abort();

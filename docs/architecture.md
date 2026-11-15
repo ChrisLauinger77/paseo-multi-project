@@ -12,7 +12,7 @@ Coordinator context uses a normal Local directory workspace. The selected isolat
 
 The coordinator dispatches through stock `create_workspace` and agent-scoped `create_agent` with finish notifications enabled. It yields after dispatch. Paseo may batch concurrent notifications into one provider prompt; each child still contributes its own notification envelope. Tests assert envelopes and child IDs, not a prompt count.
 
-The client borrows the host's plugin SDK connection. An owned agent observation invalidates the task-list query on directory changes; cleanup releases it. Task listing follows pagination and derives workers from the persisted parent label. It also recognizes fork-created task coordinators, without adapting their old prompts or tools.
+The client borrows the host's plugin SDK connection. The initial task read starts after agent subscription setup has completed or failed, so the first snapshot needs no separate invalidation and a failed observation still allows task loading. Later snapshots and directory updates coalesce with a 750 ms trailing debounce and a maximum wait of two seconds during sustained activity. Cleanup releases the observation and cancels both timers. Task listing follows pagination and derives workers from the persisted parent label. It also recognizes fork-created task coordinators, without adapting their old prompts or tools.
 
 Task archival uses agent APIs. The plugin owns the confirmation because the supported stock API exposes only an after-archive hook. Keep workers detaches direct children while preserving their own subagent trees; worker cleanup includes descendants across workspaces. A worker failure leaves the coordinator available for retry.
 
