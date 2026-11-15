@@ -101,8 +101,8 @@ for (const compact of [false, true]) {
       const picker = await page.getByTestId("multi-project-projects").boundingBox();
       expect(picker!.height).toBeLessThanOrEqual(compact ? 201 : 241);
       // Isolation can be chosen while the form is still empty.
-      await page.getByText("Local", { exact: true }).click();
-      await page.getByRole("radio", { name: "Worktree", exact: true }).click();
+      await page.getByRole("combobox", { name: "Isolation", exact: true }).selectOption("worktree");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       await page.getByTestId("multi-project-prompt").fill("Coordinate the test repositories");
       const search = page.getByTestId("multi-project-project-search");
       await search.fill("does-not-match");
@@ -116,23 +116,31 @@ for (const compact of [false, true]) {
       await page.getByTestId("multi-project-selected-only").click();
       await expect(page.getByTestId("multi-project-projects").getByRole("checkbox")).toHaveCount(2);
       await page.getByTestId("multi-project-selected-only").click();
-      await expect(page.getByText("Worktree", { exact: true })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Isolation", exact: true })).toHaveValue(
+        "worktree",
+      );
       const notes = f.projects.find((p) => p.projectKind !== "git")!;
       await search.fill(notes.projectDisplayName);
       await page.getByTestId(`multi-project-target-${notes.projectId}`).click();
-      await expect(page.getByText("Local", { exact: true })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Isolation", exact: true })).toHaveValue(
+        "local",
+      );
+      await expect(page.getByRole("combobox", { name: "Isolation", exact: true })).toBeDisabled();
       await expect(
         page.getByText("Worktree requires every selected project to be a Git repository."),
       ).toBeVisible();
       await page.getByTestId(`multi-project-target-${notes.projectId}`).click();
       await search.fill("");
-      await page.getByText("Select a provider", { exact: true }).click();
-      await page.getByRole("radio", { name: "Codex", exact: true }).click();
+      await page.getByRole("combobox", { name: "Provider", exact: true }).selectOption("codex");
+      await expect(page.getByRole("combobox", { name: "Model", exact: true })).toHaveValue(
+        "gpt-5.4-mini",
+      );
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(page.getByTestId("multi-project-agent-options")).toHaveCount(0);
       await page.getByTestId("multi-project-options-toggle").click();
       await expect(page.getByTestId("multi-project-agent-options")).toBeVisible();
-      await page.getByRole("button", { name: "Mode: Provider default", exact: true }).click();
-      await page.getByRole("radio", { name: "Auto", exact: true }).click();
+      await page.getByRole("combobox", { name: "Mode", exact: true }).selectOption("auto");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       await page.getByTestId("multi-project-options-toggle").click();
       await expect(page.getByTestId("multi-project-options-summary")).toContainText("Auto");
       await expect(page.getByTestId("multi-project-launch")).toBeEnabled();
