@@ -62,6 +62,7 @@ export class AttachmentStore {
     if (!path.isAbsolute(expanded)) throw new Error("Enter an absolute file path on this host.");
     const info = await stat(expanded);
     if (!info.isFile()) throw new Error("Choose a file, not a directory.");
+    // Keep the per-file error distinct from the remaining-task-budget error below.
     if (info.size > MAX_ATTACHMENT_BYTES)
       throw new Error("Each attachment must be 5 MiB or smaller.");
     const limit = Math.min(maxBytes, MAX_ATTACHMENT_BYTES);

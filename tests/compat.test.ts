@@ -706,6 +706,18 @@ test("rejects bad or missing attachments before starting an agent", async () => 
     const large = path.join(f.root, "large.txt");
     await writeFile(large, Buffer.alloc(MAX_ATTACHMENT_BYTES + 1));
     await expect(f.rpc("attachments.import", { path: large })).rejects.toThrow("5 MiB");
+    // Bypass the fixture's client-side launch parser to verify the server's total limit.
+    await expect(
+      f.rpc(launchRpc.name, {
+        ...f.request,
+        attachments: Array.from({ length: 5 }, (_, index) => ({
+          id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+          fileName: `reference-${index}.txt`,
+          mimeType: "text/plain",
+          size: index < 4 ? MAX_ATTACHMENT_BYTES : 1,
+        })),
+      }),
+    ).rejects.toThrow("Attachments must total 20 MiB or less");
     const file = attachmentSchema.parse(
       await f.rpc("attachments.upload", {
         fileName: "requirements.txt",
