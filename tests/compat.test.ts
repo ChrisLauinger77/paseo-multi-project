@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { fixture, TASK_LABEL, deferred } from "./fixture";
 import { DISCOVERY_TOOL, tasksRpc } from "../shared/contracts";
 import { readFileSync } from "node:fs";
+import { archiveTask } from "../server/archive";
 
 test.each([false, true])(
   "stock 0.15.4 plugin orchestration over native=%s",
@@ -168,5 +169,116 @@ test("a clean distributable loads without the plugin's development node_modules"
     }
   } finally {
     await rm(scratch, { recursive: true, force: true });
+  }
+}, 60000);
+
+test.each([false, true])(
+  "archives a coordinator with archiveWorkers=%s without touching unrelated agents or projects",
+  async (archiveWorkers) => {
+    const f = await fixture();
+    try {
+      const coordinator = await f.launch();
+      const ownWorkspace = f.paseo.workspaces.ref(coordinator.workspaceId);
+      const otherProject = f.request.projects[1]!;
+      const otherWorkspace = await f.paseo.workspaces.create({
+        source: {
+          kind: "directory",
+          path: otherProject.projectRootPath,
+          projectId: otherProject.projectId,
+        },
+      });
+      const config = { provider: "codex/gpt-5.4-mini" };
+      const local = await ownWorkspace.agents.create({
+        config,
+        parent: coordinator.agentId,
+        title: "Local worker",
+      });
+      const remote = await otherWorkspace.agents.create({
+        config,
+        parent: coordinator.agentId,
+        title: "Other project worker",
+      });
+      const nested = await ownWorkspace.agents.create({
+        config,
+        parent: remote.id,
+        title: "Nested worker",
+      });
+      const unrelated = await otherWorkspace.agents.create({ config, title: "Unrelated agent" });
+      const input = { agentId: coordinator.agentId, archiveWorkers };
+      await expect(
+        f.rpc("tasks.archive", { agentId: unrelated.id, archiveWorkers: true }),
+      ).rejects.toThrow("coordinator");
+      await f.rpc("tasks.archive", input);
+      await f.rpc("tasks.archive", input);
+      expect((await f.paseo.agents.ref(coordinator.agentId).refresh())!.agent.archivedAt).toEqual(
+        expect.any(String),
+      );
+      for (const worker of [local, remote, nested]) {
+        const snapshot = (await worker.refresh())!.agent;
+        expect(snapshot.archivedAt).toEqual(archiveWorkers ? expect.any(String) : null);
+      }
+      if (!archiveWorkers) {
+        for (const worker of [local, remote])
+          expect((await worker.refresh())!.agent.labels["paseo.parent-agent-id"]).toBeUndefined();
+        expect((await nested.refresh())!.agent.labels["paseo.parent-agent-id"]).toBe(remote.id);
+      }
+      expect((await unrelated.refresh())!.agent.archivedAt).toBeNull();
+      expect((await f.paseo.projects.list()).projects).toHaveLength(f.projects.length);
+      expect(tasksRpc.output.parse(await f.rpc(tasksRpc.name, {})).tasks).toEqual([]);
+    } finally {
+      await f.close();
+    }
+  },
+  60000,
+);
+
+test("keeps the coordinator available after a partial worker archive failure, then retries", async () => {
+  const f = await fixture();
+  try {
+    const coordinator = await f.launch();
+    const workspace = f.paseo.workspaces.ref(coordinator.workspaceId);
+    const workers = [];
+    for (const title of ["Worker one", "Worker two"])
+      workers.push(
+        await workspace.agents.create({
+          config: { provider: "codex/gpt-5.4-mini" },
+          parent: coordinator.agentId,
+          title,
+        }),
+      );
+    let archiveCalls = 0;
+    // Fault injection around the real SDK: fail one operation before it reaches the daemon.
+    const interrupted = {
+      ...f.paseo,
+      agents: {
+        ...f.paseo.agents,
+        ref(input: Parameters<typeof f.paseo.agents.ref>[0]) {
+          const agent = f.paseo.agents.ref(input);
+          return {
+            ...agent,
+            archive: async () => {
+              if (++archiveCalls === 2) throw new Error("Connection lost");
+              return agent.archive();
+            },
+          };
+        },
+      },
+    };
+    const input = { agentId: coordinator.agentId, archiveWorkers: true };
+    await expect(archiveTask(input, interrupted)).rejects.toThrow(
+      "The coordinator is kept so you can retry",
+    );
+    expect((await f.paseo.agents.ref(coordinator.agentId).refresh())!.agent.archivedAt).toBeNull();
+    const afterFailure = await Promise.all(
+      workers.map(async (worker) => (await worker.refresh())!.agent),
+    );
+    expect(afterFailure.filter((agent) => agent.archivedAt)).toHaveLength(1);
+    await archiveTask(input, interrupted);
+    for (const id of [coordinator.agentId, ...workers.map((worker) => worker.id)])
+      expect((await f.paseo.agents.ref(id).refresh())!.agent.archivedAt).toEqual(
+        expect.any(String),
+      );
+  } finally {
+    await f.close();
   }
 }, 60000);

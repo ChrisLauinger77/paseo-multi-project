@@ -35,6 +35,10 @@ The initial `--ref` selects the installed tag; it does not permanently pin all f
 4. Select **Start task**. The normal coordinator chat opens.
 5. Return to the plugin screen for the task list, worker status and links to their chats.
 
+Select **Archive…** on a card under Recent tasks to archive its coordinator. Choose **Archive task and workers** to include project workers and their subagents, or **Keep workers** to detach the workers and leave them as independent agents. **Cancel** changes nothing. Archiving stops running agents and keeps their conversations in Paseo history; project files and worktrees are kept. A failure stays visible in the dialog so you can retry.
+
+Use this plugin action for the worker choice. Paseo 0.15.4 does not expose a plugin hook before its built-in Archive action, so the plugin cannot add the confirmation to that menu.
+
 The coordinator uses Paseo tools to prepare targets and start children; it does not change repositories itself. Worktree failures stay failures. Permission requests remain pending user actions in Paseo; the plugin never grants them. The coordinator's final answer is the consolidated result in its ordinary chat.
 
 A failed launch keeps the input and shows an error. An unchanged retry reuses the daemon's creation identities while the form remains open. If you reload after an ambiguous failure, check Recent tasks before starting again: an already-created coordinator may be there.

@@ -12,6 +12,7 @@ import {
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { catalogRpc, featuresRpc, launchRpc, prepareRpc, tasksRpc } from "../shared/contracts";
 import { createTaskForm } from "./form";
+import { ArchiveTask } from "./archive-task";
 
 export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const [form] = useState(createTaskForm);
@@ -384,6 +385,13 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
               workers
             </Text>
           </Pressable>
+          <ArchiveTask
+            task={task}
+            theme={theme}
+            onArchived={() => {
+              void tasks.refetch();
+            }}
+          />
           {task.workers.map((worker) => (
             <Pressable
               key={worker.id}

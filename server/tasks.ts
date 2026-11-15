@@ -77,14 +77,22 @@ function summary(agent: PaseoAgent) {
     workspaceId: agent.workspaceId ?? null,
   };
 }
-export async function listTasks(paseo: PaseoApi) {
+export async function listTaskAgents(paseo: PaseoApi) {
   const agents: PaseoAgent[] = [];
   let cursor: string | undefined;
   do {
-    const page = await paseo.agents.list({ page: { limit: 200, ...(cursor ? { cursor } : {}) } });
+    const page = await paseo.agents.list({
+      includeBackground: true,
+      page: { limit: 200, ...(cursor ? { cursor } : {}) },
+    });
     agents.push(...page.entries.map((e) => e.agent));
     cursor = page.pageInfo.nextCursor ?? undefined;
   } while (cursor);
+  return agents;
+}
+
+export async function listTasks(paseo: PaseoApi) {
+  const agents = await listTaskAgents(paseo);
   return {
     tasks: agents
       .filter(

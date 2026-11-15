@@ -14,4 +14,6 @@ The coordinator dispatches through stock `create_workspace` and agent-scoped `cr
 
 The client borrows the host's plugin SDK connection. An owned agent observation invalidates the task-list query on directory changes; cleanup releases it. Task listing follows pagination and derives workers from the persisted parent label. It also recognizes fork-created task coordinators, without adapting their old prompts or tools.
 
+Archiving uses agent APIs. Workspace archival can remove managed checkouts and affect unrelated agents sharing a workspace, so it is not task cleanup. The plugin owns the confirmation because the supported stock API exposes only an after-archive hook. Keep workers detaches direct children while preserving their own subagent trees; worker cleanup includes descendants across workspaces. A worker failure leaves the coordinator available for retry.
+
 The production import graph contains only public plugin/SDK types and host runtime modules. Stock-package test utilities and the real Codex adapter are pinned development-only fixtures; users do not install those dependencies to run the plugin.

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import {
+  archiveRpc,
   catalogRpc,
   prepareRpc,
   launchRpc,
@@ -10,6 +11,7 @@ import {
 } from "./shared/contracts";
 import { discoveryTool } from "./server/discovery";
 import { launchTask, listTasks } from "./server/tasks";
+import { archiveTask } from "./server/archive";
 import { readCatalog, readFeatures } from "./server/catalog";
 
 export default function contribute(server: PluginServerContext) {
@@ -18,6 +20,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(featuresRpc, (input, { paseo }) => readFeatures(input, paseo));
   server.handle(launchRpc, (input, { paseo }) => launchTask(input, paseo));
   server.handle(tasksRpc, (_input, { paseo }) => listTasks(paseo));
+  server.handle(archiveRpc, (input, { paseo }) => archiveTask(input, paseo));
   return server.addHook("agent.open.before", async ({ request }) => {
     if (request.labels[PLUGIN_LABEL] !== "true") return;
     return { ...request, tools: [...request.tools, discoveryTool] };
