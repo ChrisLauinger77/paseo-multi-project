@@ -109,3 +109,6 @@ export const archiveRpc = defineRpc({
   input: z.object({ agentId: z.string().min(1), archiveWorkers: z.boolean() }),
   output: z.object({ archivedAt: z.string() }),
 });
+
+export type TaskCatalog = z.infer<typeof catalogRpc.output>;
+export type TaskFeatures = z.infer<typeof featuresRpc.output>;

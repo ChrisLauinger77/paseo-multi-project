@@ -2,17 +2,13 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { usePaseo, useRpc } from "@getpaseo/plugin/client";
-import {
-  Loading,
-  ScrollView,
-  TextInput,
-  SettingsSelect,
-  SettingsSwitch,
-} from "@getpaseo/plugin/client/ui";
+import { Loading, ScrollView, TextInput } from "@getpaseo/plugin/client/ui";
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { catalogRpc, featuresRpc, launchRpc, prepareRpc, tasksRpc } from "../shared/contracts";
 import { createTaskForm } from "./form";
 import { ArchiveTask } from "./archive-task";
+import { ProjectPicker } from "./project-picker";
+import { TaskSettings } from "./task-settings";
 
 export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const [form] = useState(createTaskForm);
@@ -92,7 +88,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
       page: { flex: 1, backgroundColor: theme.colors.surface0 },
       content: {
         padding: layout.compact ? 16 : 28,
-        gap: 20,
+        gap: 16,
         maxWidth: 920,
         width: "100%" as const,
         alignSelf: "center" as const,
@@ -109,7 +105,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         borderWidth: 1,
         borderRadius: 8,
         padding: 12,
-        minHeight: 110,
+        minHeight: 88,
         textAlignVertical: "top" as const,
       },
       row: {
@@ -119,7 +115,6 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         borderColor: theme.colors.border,
         gap: 4,
       },
-      selected: { borderColor: theme.colors.accent, backgroundColor: theme.colors.surface1 },
       button: {
         padding: 12,
         borderRadius: 8,
@@ -184,152 +179,26 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
           style={styles.input}
         />
       </View>
-      <View style={styles.group}>
-        <Text style={styles.label}>Projects</Text>
-        {!projects.length ? (
-          <Text style={styles.muted}>Add projects in Paseo before launching a task.</Text>
-        ) : null}
-        {projects.map((project) => {
-          const selected = state.projects.some((p) => p.projectId === project.projectId);
-          return (
-            <Pressable
-              key={project.projectId}
-              testID={`multi-project-target-${project.projectId}`}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: selected }}
-              disabled={state.pending}
-              onPress={() => form.toggleProject(project)}
-              style={[styles.row, selected && styles.selected]}
-            >
-              <Text style={styles.text}>
-                {selected ? "✓ " : ""}
-                {project.projectCustomName || project.projectDisplayName}
-              </Text>
-              <Text style={styles.muted}>{project.projectRootPath}</Text>
-            </Pressable>
-          );
-        })}
-        {missing ? (
-          <Text style={styles.error} accessibilityRole="alert">
-            A selected project was removed. Deselect it or refresh before retrying.
-          </Text>
-        ) : null}
-        {state.projects
-          .filter((p) => !projects.some((current) => current.projectId === p.projectId))
-          .map((p) => (
-            <Pressable key={p.projectId} onPress={() => form.toggleProject(p)}>
-              <Text style={styles.error}>Remove missing project: {p.projectDisplayName}</Text>
-            </Pressable>
-          ))}
-      </View>
-      <SettingsSelect
-        label="Isolation"
-        hint={
-          !canWorktree
-            ? "Worktree requires every selected project to be a Git repository."
-            : undefined
-        }
-        value={state.isolation}
-        options={[
-          { value: "local", label: "Local" },
-          { value: "worktree", label: "Worktree" },
-        ]}
-        onValueChange={form.setIsolation}
-        disabled={state.pending || !canWorktree}
+      <ProjectPicker
+        projects={projects}
+        selected={state.projects}
+        pending={state.pending}
+        compact={layout.compact}
+        theme={theme}
+        onToggle={form.toggleProject}
       />
-      <SettingsSelect
-        label="Provider"
-        value={state.config?.provider || ""}
-        options={[
-          { value: "", label: "Select a provider" },
-          ...(catalog.data?.providers
-            .filter((p) => p.status === "ready")
-            .map((p) => ({ value: p.id, label: p.label })) || []),
-        ]}
-        disabled={state.pending}
-        onValueChange={(provider) => {
-          const p = catalog.data?.providers.find((p) => p.id === provider);
-          form.setConfig(p?.models[0] ? { provider, model: p.models[0].id } : null);
-        }}
+      <TaskSettings
+        config={state.config}
+        isolation={state.isolation}
+        providers={catalog.data?.providers || []}
+        features={features.data?.features || []}
+        canWorktree={canWorktree}
+        pending={state.pending}
+        compact={layout.compact}
+        theme={theme}
+        setConfig={form.setConfig}
+        setIsolation={form.setIsolation}
       />
-      {selectedProvider && state.config ? (
-        <SettingsSelect
-          label="Model"
-          value={state.config.model}
-          options={selectedProvider.models.map((m) => ({ value: m.id, label: m.label }))}
-          disabled={state.pending}
-          onValueChange={(model) => form.setConfig({ provider: state.config!.provider, model })}
-        />
-      ) : null}
-      {selectedProvider?.modes.length && state.config ? (
-        <SettingsSelect
-          label="Mode"
-          value={state.config.modeId || ""}
-          options={[
-            { value: "", label: "Provider default" },
-            ...selectedProvider.modes.map((m) => ({ value: m.id, label: m.label })),
-          ]}
-          disabled={state.pending}
-          onValueChange={(modeId) =>
-            form.setConfig({
-              ...state.config!,
-              modeId: modeId || undefined,
-              featureValues: undefined,
-            })
-          }
-        />
-      ) : null}
-      {selectedModel?.thinkingOptions.length && state.config ? (
-        <SettingsSelect
-          label="Thinking"
-          value={state.config.thinkingOptionId || ""}
-          options={[
-            { value: "", label: "Model default" },
-            ...selectedModel.thinkingOptions.map((t) => ({ value: t.id, label: t.label })),
-          ]}
-          disabled={state.pending}
-          onValueChange={(thinkingOptionId) =>
-            form.setConfig({
-              ...state.config!,
-              thinkingOptionId: thinkingOptionId || undefined,
-              featureValues: undefined,
-            })
-          }
-        />
-      ) : null}
-      {features.data?.features.map((feature) =>
-        feature.type === "toggle" ? (
-          <SettingsSwitch
-            key={feature.id}
-            label={feature.label}
-            value={Boolean(state.config?.featureValues?.[feature.id] ?? feature.value)}
-            disabled={state.pending}
-            onValueChange={(value) =>
-              form.setConfig({
-                ...state.config!,
-                featureValues: { ...state.config?.featureValues, [feature.id]: value },
-              })
-            }
-          />
-        ) : (
-          <SettingsSelect
-            key={feature.id}
-            label={feature.label}
-            value={String(state.config?.featureValues?.[feature.id] ?? feature.value ?? "")}
-            options={[
-              { value: "", label: "Provider default" },
-              ...feature.options.map((o) => ({ value: o.id, label: o.label })),
-            ]}
-            disabled={state.pending}
-            onValueChange={(value) =>
-              form.setConfig({
-                ...state.config!,
-                featureValues: { ...state.config?.featureValues, [feature.id]: value || null },
-              })
-            }
-          />
-        ),
-      )}
       {featureInput && features.error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {features.error.message}

@@ -30,8 +30,8 @@ The initial `--ref` selects the installed tag; it does not permanently pin all f
 ## Run a task
 
 1. Open **Multi-project tasks** in the sidebar or Command Center.
-2. Enter a task and select registered projects on this host.
-3. Choose Local or Worktree, then a provider/model and optional mode, thinking and provider feature settings.
+2. Enter a task and select registered projects on this host. Search by name/path or use **Selected only** to review your selection; the project list scrolls within the form.
+3. Choose Local or Worktree and a provider/model. **Agent options** expands mode, thinking and provider-specific settings; its summary stays visible when collapsed. Worktree can be chosen before selecting projects and becomes unavailable when a selected project is not a Git repository.
 4. Select **Start task**. The normal coordinator chat opens.
 5. Return to the plugin screen for the task list, worker status and links to their chats.
 
