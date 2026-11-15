@@ -8,6 +8,7 @@ import { catalogRpc, featuresRpc, launchRpc, prepareRpc, tasksRpc } from "../sha
 import { createTaskForm } from "./form";
 import { ArchiveTask } from "./archive-task";
 import { ProjectPicker } from "./project-picker";
+import { TaskAttachments } from "./attachments";
 import { TaskSettings } from "./task-settings";
 
 export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
@@ -78,6 +79,8 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const canWorktree = state.projects.every((p) => p.projectKind === "git");
   const canSubmit =
     !state.pending &&
+    !state.attachmentPending &&
+    !state.attachmentError &&
     Boolean(state.task.trim() && state.projects.length && state.config && selectedModel) &&
     !missing &&
     !features.isPending &&
@@ -179,6 +182,16 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
           style={styles.input}
         />
       </View>
+      <TaskAttachments
+        compact={layout.compact}
+        files={state.attachments}
+        pending={state.pending}
+        uploading={state.attachmentPending}
+        error={state.attachmentError}
+        theme={theme}
+        onChange={form.setAttachments}
+        onStatus={form.setAttachmentStatus}
+      />
       <ProjectPicker
         projects={projects}
         selected={state.projects}

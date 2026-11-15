@@ -6,17 +6,19 @@ import {
   PLUGIN_LABEL,
   INPUT_LABEL,
   DISCOVERY_TOOL,
+  ATTACHMENTS_TOOL,
   launchSchema,
   type TaskLaunch,
 } from "../shared/contracts";
 import { buildOrchestrationPrompt } from "../shared/prompt";
+import { AttachmentStore, isVisionImage } from "./attachments";
 import { listProjects, validateTargets } from "./projects";
 
 export function deriveTitle(task: string) {
   return task.trim().split(/\r?\n/)[0]!.replace(/\s+/g, " ").slice(0, 60);
 }
 
-export async function launchTask(raw: TaskLaunch, paseo: PaseoApi) {
+export async function launchTask(raw: TaskLaunch, paseo: PaseoApi, store = new AttachmentStore()) {
   const input = launchSchema.parse(raw);
   const projects = validateTargets(input.projects, await listProjects(paseo), input.isolation);
   const first = projects[0]!;
@@ -28,9 +30,12 @@ export async function launchTask(raw: TaskLaunch, paseo: PaseoApi) {
   const policy = config.providers[input.config.provider]?.paseoTools;
   if (
     policy?.enabled === false ||
-    ["create_workspace", "create_agent", DISCOVERY_TOOL].some((t) =>
-      policy?.disabledTools?.includes(t),
-    )
+    [
+      "create_workspace",
+      "create_agent",
+      DISCOVERY_TOOL,
+      ...(input.attachments?.length ? [ATTACHMENTS_TOOL] : []),
+    ].some((t) => policy?.disabledTools?.includes(t))
   )
     throw new Error("The selected provider's tool policy disables a required multi-project tool.");
   const snapshot = await paseo.providers.waitForReady({ cwd: first.projectRootPath });
@@ -48,6 +53,8 @@ export async function launchTask(raw: TaskLaunch, paseo: PaseoApi) {
     cwd: first.projectRootPath,
   });
   if (features.error) throw new Error(features.error);
+  const files = await store.resolve(input.attachments || []);
+  const attachments = files.map(({ bytes: _bytes, ...file }) => file);
   // Both operations use daemon-owned idempotency; a lost RPC response can be retried unchanged.
   const workspace = await paseo.workspaces.create({
     source: { kind: "directory", path: first.projectRootPath, projectId: first.projectId },
@@ -56,6 +63,10 @@ export async function launchTask(raw: TaskLaunch, paseo: PaseoApi) {
   const coordinator = await workspace.agents.create({
     config: agentConfig,
     title: deriveTitle(input.task),
+    attachments: attachments.map((file) => ({ type: "uploaded_file" as const, ...file })),
+    images: files
+      .filter((file) => isVisionImage(file.mimeType))
+      .map((file) => ({ data: file.bytes.toString("base64"), mimeType: file.mimeType })),
     idempotencyKey: `multi-project:${input.id}:coordinator`,
     labels: { [TASK_LABEL]: "true", [PLUGIN_LABEL]: "true", [INPUT_LABEL]: JSON.stringify(input) },
     prompt: buildOrchestrationPrompt({
@@ -63,6 +74,7 @@ export async function launchTask(raw: TaskLaunch, paseo: PaseoApi) {
       projects,
       isolation: input.isolation,
       agent: input.config,
+      attachments,
     }),
   });
   return { agentId: coordinator.id, workspaceId: workspace.id };

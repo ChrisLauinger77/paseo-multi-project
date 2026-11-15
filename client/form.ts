@@ -1,6 +1,9 @@
-import type { TaskAgentConfig, TaskLaunch, TaskProject } from "../shared/contracts";
+import type { TaskAgentConfig, TaskLaunch, TaskProject, TaskAttachment } from "../shared/contracts";
 export interface TaskFormState {
   task: string;
+  attachments: TaskAttachment[];
+  attachmentPending: boolean;
+  attachmentError: string | null;
   projects: TaskProject[];
   isolation: "local" | "worktree";
   config: TaskAgentConfig | null;
@@ -11,6 +14,9 @@ export interface TaskFormState {
 export function createTaskForm() {
   let state: TaskFormState = {
     task: "",
+    attachments: [],
+    attachmentPending: false,
+    attachmentError: null,
     projects: [],
     isolation: "local",
     config: null,
@@ -36,6 +42,12 @@ export function createTaskForm() {
         listeners.delete(listener);
       };
     },
+    setAttachments(attachments: TaskAttachment[]) {
+      edit({ attachments: [...attachments], attachmentError: null });
+    },
+    setAttachmentStatus(attachmentPending: boolean, attachmentError: string | null = null) {
+      if (!state.pending) publish({ attachmentPending, attachmentError });
+    },
     setTask(task: string) {
       edit({ task });
     },
@@ -56,10 +68,18 @@ export function createTaskForm() {
       prepare(): Promise<{ id: string }>;
       launch(input: TaskLaunch): Promise<{ agentId: string; workspaceId: string }>;
     }) {
-      if (state.pending || !state.task.trim() || !state.projects.length || !state.config)
+      if (
+        state.pending ||
+        state.attachmentPending ||
+        state.attachmentError ||
+        !state.task.trim() ||
+        !state.projects.length ||
+        !state.config
+      )
         return null;
       const input = {
         task: state.task,
+        attachments: state.attachments,
         projects: state.projects,
         isolation: state.isolation,
         config: state.config,

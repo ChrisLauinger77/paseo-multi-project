@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { fixture, deferred } from "./fixture";
-import { TASK_LABEL } from "../shared/contracts";
-import { mkdir } from "node:fs/promises";
+import { TASK_LABEL, INPUT_LABEL, MAX_ATTACHMENT_BYTES } from "../shared/contracts";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 for (const compact of [false, true]) {
@@ -104,6 +104,56 @@ for (const compact of [false, true]) {
       await page.getByRole("combobox", { name: "Isolation", exact: true }).selectOption("worktree");
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await page.getByTestId("multi-project-prompt").fill("Coordinate the test repositories");
+      const requirements = {
+        name: "requirements.md",
+        mimeType: "text/markdown",
+        buffer: Buffer.from("Shared requirements for every worker."),
+      };
+      const png = {
+        name: "reference.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
+          "base64",
+        ),
+      };
+      const chooserPromise = page.waitForEvent("filechooser");
+      await page.getByTestId("multi-project-attach-files").click();
+      await (await chooserPromise).setFiles(requirements);
+      await expect(
+        page.getByRole("button", { name: "Remove attachment requirements.md", exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Remove attachment requirements.md", exact: true })
+        .click();
+      await expect(
+        page.getByRole("button", { name: "Remove attachment requirements.md", exact: true }),
+      ).toHaveCount(0);
+      await page.getByLabel("Attach files", { exact: true }).setInputFiles([requirements, png]);
+      await expect(
+        page.getByRole("button", { name: "Remove attachment reference.png", exact: true }),
+      ).toBeVisible();
+      const transfer = await page.evaluateHandle(() => {
+        const data = new DataTransfer();
+        data.items.add(
+          new File(["Shared extra context."], "shared-context.txt", { type: "text/plain" }),
+        );
+        return data;
+      });
+      if (compact)
+        await page.getByTestId("multi-project-prompt").evaluate((element, clipboardData) => {
+          element.dispatchEvent(
+            new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }),
+          );
+        }, transfer);
+      else
+        await page
+          .getByTestId("multi-project-screen")
+          .dispatchEvent("drop", { dataTransfer: transfer });
+      await transfer.dispose();
+      await expect(
+        page.getByRole("button", { name: "Remove attachment shared-context.txt", exact: true }),
+      ).toBeVisible();
       const search = page.getByTestId("multi-project-project-search");
       await search.fill("does-not-match");
       await expect(page.getByText("No matching projects.")).toBeVisible();
@@ -144,6 +194,29 @@ for (const compact of [false, true]) {
       await page.getByTestId("multi-project-options-toggle").click();
       await expect(page.getByTestId("multi-project-options-summary")).toContainText("Auto");
       await expect(page.getByTestId("multi-project-launch")).toBeEnabled();
+      await page.getByLabel("Attach files", { exact: true }).setInputFiles({
+        name: "too-large.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.alloc(MAX_ATTACHMENT_BYTES + 1),
+      });
+      await expect(page.getByTestId("multi-project-attachment-error")).toContainText("5 MiB");
+      await expect(page.getByTestId("multi-project-launch")).toBeDisabled();
+      await page.getByRole("button", { name: "Dismiss attachment error", exact: true }).click();
+      await expect(page.getByTestId("multi-project-launch")).toBeEnabled();
+      await page.getByTestId("multi-project-attach-host").click();
+      await page.getByTestId("multi-project-host-file-path").fill(path.join(f.root, "missing.txt"));
+      await page.getByTestId("multi-project-host-file-add").click();
+      await expect(page.getByTestId("multi-project-attachment-error")).toBeVisible();
+      await expect(page.getByTestId("multi-project-launch")).toBeDisabled();
+      const hostFile = path.join(f.root, "host-notes.md");
+      await writeFile(hostFile, "Host file context.");
+      await page.getByTestId("multi-project-host-file-path").fill(hostFile);
+      await page.getByTestId("multi-project-host-file-add").click();
+      await expect(
+        page.getByRole("button", { name: "Remove attachment host-notes.md", exact: true }),
+      ).toBeVisible();
+      await expect(page.getByTestId("multi-project-attachment-error")).toHaveCount(0);
+      await expect(page.getByTestId("multi-project-launch")).toBeEnabled();
       await mkdir("artifacts", { recursive: true });
       await page.screenshot({
         path: `artifacts/${compact ? "compact" : "desktop"}-form.png`,
@@ -162,6 +235,11 @@ for (const compact of [false, true]) {
       expect(agents).toHaveLength(1);
       const coordinator = agents[0]!.agent;
       expect(coordinator.currentModeId).toBe("auto");
+      expect(
+        JSON.parse(coordinator.labels[INPUT_LABEL]!).attachments.map(
+          (file: { fileName: string }) => file.fileName,
+        ),
+      ).toEqual(["requirements.md", "reference.png", "shared-context.txt", "host-notes.md"]);
       const workers = [];
       for (const project of f.request.projects) {
         const workspace = await f.paseo.workspaces.create({

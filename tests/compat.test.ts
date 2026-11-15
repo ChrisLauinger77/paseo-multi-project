@@ -1,7 +1,17 @@
 import { expect, test } from "vitest";
 import { fixture, TASK_LABEL, deferred } from "./fixture";
-import { DISCOVERY_TOOL, tasksRpc } from "../shared/contracts";
+import {
+  DISCOVERY_TOOL,
+  ATTACHMENTS_TOOL,
+  tasksRpc,
+  attachmentSchema,
+  INPUT_LABEL,
+  MAX_ATTACHMENT_BYTES,
+} from "../shared/contracts";
 import { readFileSync } from "node:fs";
+import { AttachmentStore } from "../server/attachments";
+import { writeFile, readFile } from "node:fs/promises";
+import path from "node:path";
 import { archiveTask } from "../server/archive";
 
 test.each([false, true])(
@@ -278,6 +288,127 @@ test("keeps the coordinator available after a partial worker archive failure, th
       expect((await f.paseo.agents.ref(id).refresh())!.agent.archivedAt).toEqual(
         expect.any(String),
       );
+  } finally {
+    await f.close();
+  }
+}, 60000);
+
+test.each([false, true])(
+  "uploads and imports attachments, sends image input, and shares durable file paths with workers native=%s",
+  async (native) => {
+    const f = await fixture(native);
+    try {
+      const content = "Shared requirements: update both selected projects.\n";
+      const hostPath = path.join(f.root, "requirements.md");
+      await writeFile(hostPath, content);
+      const text = attachmentSchema.parse(await f.rpc("attachments.import", { path: hostPath }));
+      const png =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+      const image = attachmentSchema.parse(
+        await f.rpc("attachments.upload", {
+          fileName: "reference.png",
+          mimeType: "image/png",
+          data: png,
+        }),
+      );
+      const attachments = [text, image];
+      const files = await new AttachmentStore(f.attachmentDirectory).resolve(attachments);
+      expect(await readFile(files[0]!.path, "utf8")).toBe(content);
+      expect(await readFile(files[1]!.path)).toEqual(Buffer.from(png, "base64"));
+      // A new store instance verifies files survive a plugin process reload.
+      expect(
+        (await new AttachmentStore(f.attachmentDirectory).resolve(attachments)).map(
+          (file) => file.id,
+        ),
+      ).toEqual(attachments.map((file) => file.id));
+      const coordinator = await f.launch({ ...f.request, attachments });
+      expect(await f.launch({ ...f.request, attachments })).toEqual(coordinator);
+      const prompt = await f.firstPrompt.promise;
+      expect(prompt).toEqual(
+        expect.arrayContaining([{ type: "image", data: png, mimeType: "image/png" }]),
+      );
+      const promptText =
+        typeof prompt === "string"
+          ? prompt
+          : prompt
+              .filter((block) => block.type === "text")
+              .map((block) => block.text)
+              .join("\n");
+      for (const file of files) {
+        expect(promptText).toContain(file.path);
+        expect(promptText).toContain(file.fileName);
+      }
+      expect(promptText).toContain("EVERY project worker");
+      expect(promptText).toContain("Include the complete attachment list");
+      const agent = (await f.paseo.agents.ref(coordinator.agentId).refresh())!.agent;
+      expect(JSON.parse(agent.labels[INPUT_LABEL]!).attachments).toEqual(attachments);
+      expect(agent.labels[INPUT_LABEL]).not.toContain(png);
+      const expectedFiles = files.map(({ bytes: _bytes, ...file }) => file);
+      for (const project of f.request.projects) {
+        const workspace = await f.paseo.workspaces.create({
+          source: {
+            kind: "directory",
+            path: project.projectRootPath,
+            projectId: project.projectId,
+          },
+        });
+        // No attachment metadata in this prompt: the hook must still give the worker its files.
+        const worker = await workspace.agents.create({
+          parent: coordinator.agentId,
+          config: { provider: "codex/gpt-5.4-mini" },
+          title: "Attachment worker",
+          prompt: "WORKER: inspect shared task context",
+        });
+        const tools = await f.tools(worker.id);
+        expect(tools.names()).toContain(ATTACHMENTS_TOOL);
+        expect((await tools.invoke(ATTACHMENTS_TOOL, {})).structuredContent).toEqual({
+          attachments: expectedFiles,
+        });
+        expect(await readFile(expectedFiles[0]!.path, "utf8")).toBe(content);
+      }
+      const ordinary = await f.plainAgent();
+      expect((await f.tools(ordinary.id)).names()).not.toContain(ATTACHMENTS_TOOL);
+    } finally {
+      await f.close();
+    }
+  },
+  60000,
+);
+
+test("rejects bad or missing attachments before starting an agent", async () => {
+  const f = await fixture();
+  try {
+    await expect(
+      f.rpc("attachments.upload", {
+        fileName: "../escape.txt",
+        mimeType: "text/plain",
+        data: "eA==",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      f.rpc("attachments.upload", { fileName: "bad.txt", mimeType: "text/plain", data: "!!!" }),
+    ).rejects.toThrow("Invalid attachment encoding");
+    await expect(f.rpc("attachments.import", { path: f.root })).rejects.toThrow("Choose a file");
+    const large = path.join(f.root, "large.txt");
+    await writeFile(large, Buffer.alloc(MAX_ATTACHMENT_BYTES + 1));
+    await expect(f.rpc("attachments.import", { path: large })).rejects.toThrow("5 MiB");
+    const file = attachmentSchema.parse(
+      await f.rpc("attachments.upload", {
+        fileName: "requirements.txt",
+        mimeType: "text/plain",
+        data: "eA==",
+      }),
+    );
+    await expect(
+      f.launch({ ...f.request, attachments: [{ ...file, fileName: "changed.txt" }] }),
+    ).rejects.toThrow("Cannot read attachment");
+    await expect(
+      f.launch({
+        ...f.request,
+        attachments: [{ ...file, id: "2512d7de-1da4-4b5c-8477-d778a0ee84ce" }],
+      }),
+    ).rejects.toThrow("Cannot read attachment");
+    expect((await f.paseo.agents.list()).entries).toEqual([]);
   } finally {
     await f.close();
   }

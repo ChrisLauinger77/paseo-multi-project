@@ -3,6 +3,7 @@ import { createTestPaseoDaemon } from "../node_modules/@getpaseo/server/dist/ser
 import { createTestAgentClient } from "../node_modules/@getpaseo/server/dist/server/server/test-utils/fake-agent-client.js";
 import type {
   AgentClient,
+  AgentPromptInput,
   AgentLaunchContext,
   AgentSessionConfig,
 } from "../node_modules/@getpaseo/server/dist/server/server/agent/agent-sdk-types.js";
@@ -41,6 +42,8 @@ export async function fixture(
   const bothDelivered = deferred();
   const launches: Array<{ config: AgentSessionConfig; context?: AgentLaunchContext }> = [];
   const notifications: string[] = [];
+  const firstPrompt = deferred<AgentPromptInput>();
+  const attachmentDirectory = path.join(root, "plugin-attachments");
   function recordNotification(prompt: unknown) {
     const text = typeof prompt === "string" ? prompt : JSON.stringify(prompt);
     if (!text.includes("agent-notification")) return;
@@ -58,7 +61,10 @@ export async function fixture(
   }
   const inner = createTestAgentClient("codex", {
     supportsMcpServers: true,
-    onStartTurn: recordNotification,
+    onStartTurn: (prompt) => {
+      firstPrompt.resolve(prompt);
+      recordNotification(prompt);
+    },
     beforeTurnComplete: async (prompt) => {
       const text = JSON.stringify(prompt);
       if (text.includes("Coordinate this multi-project task")) await coordinator.promise;
@@ -87,6 +93,8 @@ export async function fixture(
   let daemon: Awaited<ReturnType<typeof createTestPaseoDaemon>> | undefined;
   let driver: DaemonClient | undefined;
   const mcps: Client[] = [];
+  const previousAttachmentDirectory = process.env.PASEO_MULTI_PROJECT_DATA_DIR;
+  process.env.PASEO_MULTI_PROJECT_DATA_DIR = attachmentDirectory;
   try {
     daemon = await createTestPaseoDaemon({
       daemonVersion: "0.15.4",
@@ -180,6 +188,8 @@ export async function fixture(
     }
     return {
       root,
+      attachmentDirectory,
+      firstPrompt,
       daemon,
       driver,
       paseo,
@@ -220,6 +230,9 @@ export async function fixture(
     await daemon?.close();
     await rm(root, { recursive: true, force: true });
     throw error;
+  } finally {
+    if (previousAttachmentDirectory === undefined) delete process.env.PASEO_MULTI_PROJECT_DATA_DIR;
+    else process.env.PASEO_MULTI_PROJECT_DATA_DIR = previousAttachmentDirectory;
   }
 }
 export { TASK_LABEL, PLUGIN_LABEL };

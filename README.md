@@ -30,10 +30,14 @@ The initial `--ref` selects the installed tag; it does not permanently pin all f
 ## Run a task
 
 1. Open **Multi-project tasks** in the sidebar or Command Center.
-2. Enter a task and select registered projects on this host. Search by name/path or use **Selected only** to review your selection; the project list scrolls within the form.
+2. Enter a task, optionally attach files, and select registered projects on this host. Search by name/path or use **Selected only** to review your selection; the project list scrolls within the form.
 3. Choose Local or Worktree and a provider/model. **Agent options** expands mode, thinking and provider-specific settings; its summary stays visible when collapsed. Worktree can be chosen before selecting projects and becomes unavailable when a selected project is not a Git repository.
 4. Select **Start task**. The normal coordinator chat opens.
 5. Return to the plugin screen for the task list, worker status and links to their chats.
+
+Use **Attach files** on desktop/web, or drop/paste files into the form. **Add host file** copies a file by its absolute path on the daemon host and is available on every platform. Paseo 0.15.4 exposes no native file picker to plugins, so iOS/Android use host-file import. Each task accepts up to 8 files, 5 MiB per file and 20 MiB total. Uploads and unresolved attachment errors block Start task; remove a file or dismiss an error to continue without it.
+
+The coordinator receives every attachment, with PNG/JPEG/GIF/WebP also sent as image input. Each project worker also receives a task-scoped `multi_project_task_attachments` lookup tool automatically. Its instructions include the same file names, types and absolute host paths, and tell it to read/view those files. Workers use their provider's normal file/image tools and permissions. File contents are reference data. They do not replace the fixed orchestration instructions.
 
 Select **Archive…** on a card under Recent tasks to archive its coordinator. Choose **Archive task and workers** to include project workers and their subagents, or **Keep workers** to detach the workers and leave them as independent agents. **Cancel** changes nothing. Archiving stops running agents and keeps their conversations in Paseo history; project files and worktrees are kept. A failure stays visible in the dialog so you can retry.
 
@@ -41,7 +45,7 @@ Use this plugin action for the worker choice. Paseo 0.15.4 does not expose a plu
 
 The coordinator uses Paseo tools to prepare targets and start children; it does not change repositories itself. Worktree failures stay failures. Permission requests remain pending user actions in Paseo; the plugin never grants them. The coordinator's final answer is the consolidated result in its ordinary chat.
 
-A failed launch keeps the input and shows an error. An unchanged retry reuses the daemon's creation identities while the form remains open. If you reload after an ambiguous failure, check Recent tasks before starting again: an already-created coordinator may be there.
+A failed launch keeps the input and attachment references and shows an error. An unchanged retry reuses the daemon's creation identities while the form remains open. If you reload after an ambiguous failure, check Recent tasks before starting again: an already-created coordinator may be there.
 
 ## Existing fork users
 
@@ -51,7 +55,9 @@ Do not delete agents, workspaces or the fork branches as part of initial testing
 
 ## Data and scope
 
-The plugin reads the current host's registered projects, provider catalog/configuration, and agent records. It stores task identity and selected input as labels on the coordinator; Paseo stores prompts and agent history normally. Project names/paths, the task, and worker results are sent to the configured agent providers as part of normal operation. There is no separate hosted plugin service, telemetry or additional API key.
+The plugin reads the current host's registered projects, provider catalog/configuration, and agent records. It stores task identity and selected input as labels on the coordinator; Paseo stores prompts and agent history normally. Project names/paths, the task, attachments and worker results are sent to the configured agent providers as part of normal operation. There is no separate hosted plugin service, telemetry or additional API key.
+
+Attachment copies and integrity metadata are saved on the daemon host under `~/.paseo-multi-project/attachments`. The plugin does not write them into selected repositories or modify original files. Copies remain for conversation history and resume, including after draft removal, task archive or plugin removal. Task labels store references and file metadata, not file bytes. Set `PASEO_MULTI_PROJECT_DATA_DIR` in the daemon environment to choose another attachment directory; tests always use a temporary directory.
 
 This version uses a plugin-owned screen/sidebar entry rather than modifying the built-in New Workspace form or workspace grouping. Interface text is currently English.
 

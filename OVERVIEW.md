@@ -2,7 +2,7 @@
 
 Give one task to several existing Paseo projects. A coordinator prepares Local or managed Worktree workspaces, starts one child agent per selected project in parallel, and reports a consolidated result in its normal chat.
 
-Open the plugin from the sidebar or Command Center. Search projects in a bounded picker, choose Local or Worktree and a provider/model, then expand Agent options for provider-specific settings. Worktree isolation is available only for Git projects. Recent tasks links to coordinators and workers and offers Archive, with a choice to archive workers or keep them as independent agents. Archiving preserves project files and worktrees.
+Open the plugin from the sidebar or Command Center. Search projects in a bounded picker, choose Local or Worktree and a provider/model, then expand Agent options for provider-specific settings. Worktree isolation is available only for Git projects. Attach files/images on desktop/web or import a file from the daemon host; shared context is supplied to the coordinator and all project workers. Recent tasks links to coordinators and workers and offers Archive, with a choice to archive workers or keep them as independent agents. Archiving preserves project files and worktrees.
 
 Requires Paseo daemon and app 0.15.4, registered projects, and an available provider with Paseo tools enabled. The initial supported range excludes 0.16.0. The interface is English. Desktop and compact browser layouts are tested; native mobile execution needs verification.
 
