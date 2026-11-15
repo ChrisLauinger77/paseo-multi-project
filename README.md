@@ -75,7 +75,7 @@ Start with [AGENTS.md](AGENTS.md) for contributor instructions and [architecture
 | `shared/`                             | RPC schemas, labels, limits and orchestration prompt                                               |
 | `tests/`                              | Isolated stock-daemon fixture, compatibility tests, browser tests and optional real-provider smoke |
 
-Use Node 22.20.0 or a compatible Node 22 release:
+Use the Node 22 version pinned in [.github/workflows/ci.yml](.github/workflows/ci.yml):
 
 ```sh
 npm ci
