@@ -10,7 +10,7 @@ This is a standalone plugin. It requires no Paseo fork or upstream PR #5014. The
 - An enabled, available coding-agent provider with Paseo tool delivery enabled. Both MCP and native delivery are exercised by automated compatibility tests.
 - Existing registered projects on one host. Worktree isolation requires all selected projects to be Git repositories.
 
-The first release is experimental. Automated browser checks cover Linux desktop and compact web layouts. Native iOS/Android and additional real providers need testing. See [validation](docs/validation.md) for exact evidence.
+The plugin is experimental. Automated browser checks cover Linux desktop and compact web layouts. Native iOS/Android and additional real providers need testing. See [validation](docs/validation.md) for exact evidence.
 
 ## Install from Git
 
@@ -31,7 +31,7 @@ The initial `--ref` selects the installed tag; it does not permanently pin all f
 
 1. Open **Multi-project tasks** in the sidebar or Command Center.
 2. Enter a task, optionally attach files, and select registered projects on this host. Search by name/path or use **Selected only** to review your selection; the project list scrolls within the form.
-3. Choose Local or Worktree and a provider/model. **Agent options** expands mode, thinking and provider-specific settings; its summary stays visible when collapsed. Worktree can be chosen before selecting projects and becomes unavailable when a selected project is not a Git repository.
+3. Choose Local or Worktree and a provider/model. **Agent options** expands mode, thinking and provider-specific settings; its summary stays visible when collapsed. The same agent settings apply to the coordinator and all project workers. Worktree can be chosen before selecting projects and becomes unavailable when a selected project is not a Git repository.
 4. Select **Start task**. The normal coordinator chat opens.
 5. Return to the plugin screen for the task list, worker status and links to their chats.
 
@@ -63,6 +63,16 @@ This version uses a plugin-owned screen/sidebar entry rather than modifying the 
 
 ## Development
 
+Start with [AGENTS.md](AGENTS.md) for contributor instructions and [architecture](docs/architecture.md) for the execution flow.
+
+| Location                              | Responsibility                                                                                     |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `index.client.tsx`, `index.server.ts` | Register client contributions, RPC handlers and the session-open hook                              |
+| `client/`                             | Task form, project/settings controls, attachments, task list and archive dialog                    |
+| `server/`                             | Launch validation, coordinator creation, task listing/archive, attachment storage and agent tools  |
+| `shared/`                             | RPC schemas, labels, limits and orchestration prompt                                               |
+| `tests/`                              | Isolated stock-daemon fixture, compatibility tests, browser tests and optional real-provider smoke |
+
 Use Node 22.20.0 or a compatible Node 22 release:
 
 ```sh
@@ -76,7 +86,11 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-The compatibility and browser tests use the unmodified published `@getpaseo/server@0.15.4`, temporary projects/homes and OS-assigned ports. They never connect to your normal daemon. The typed provider adapter is supplied by the stock package; its fixture imports are confined to tests.
+`npm test` runs the unit and compatibility suites sequentially. Browser tests run separately. These suites also run in CI. Run `npm run format` to format changes and `npm run format:check` to check formatting.
+
+The compatibility and browser tests use the unmodified published `@getpaseo/server@0.15.4`, temporary projects/homes and OS-assigned ports. They never connect to your normal daemon. The typed provider adapter is supplied by the stock package; its fixture imports are confined to tests. Compatibility tests also pack and load the plugin without its development `node_modules`, verifying that the stock host can compile the distributed source.
+
+Paseo package versions are pinned to the tested baseline. When updating them, review `paseo-plugin.json`, the test fixtures/version assertions and [validation evidence](docs/validation.md) together; widen the supported range only after verification. `renovate.json` uses the shared Paseo plugin preset for dependency updates.
 
 For an explicit real-provider smoke with your installed Codex and normal credentials:
 
