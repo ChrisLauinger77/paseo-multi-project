@@ -12,18 +12,28 @@ This is a standalone plugin. It requires no Paseo fork or upstream PR #5014. The
 
 The plugin is experimental. Automated browser checks cover Linux desktop and compact web layouts. Native iOS/Android and additional real providers need testing. See [validation](docs/validation.md) for exact evidence.
 
-## Install from Git
+## Install
 
 Install on the machine running the daemon:
 
 ```sh
-paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.5
+paseo plugin add chrislauinger77/multi-project
 paseo plugin ls
 ```
 
+This installs the approved version from the [Paseo plugin registry](https://paseo.sh/plugins/chrislauinger77/multi-project).
+
 Paseo plugins are trusted, unsandboxed code. Server code runs with the daemon user's access; client code runs in connected Paseo apps. External plugins require `pluginsEnabled: true` in the daemon configuration. Review that setting before enabling it; this repository's tests only enable plugins on isolated test daemons.
 
-Connected desktop, web and mobile clients receive the client contribution from the daemon. Install the plugin separately on each daemon where you want to run tasks. No npm publication or registry listing is required for direct Git installation.
+Connected desktop, web and mobile clients receive the client contribution from the daemon. Install the plugin separately on each daemon where you want to run tasks.
+
+### Alternative: install from Git
+
+To install a specific release directly from Git:
+
+```sh
+paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.5
+```
 
 The initial `--ref` selects the installed tag; it does not permanently pin all future update checks. Review the proposed revision before applying an update. Use Paseo's plugin update controls rather than replacing managed files.
 
