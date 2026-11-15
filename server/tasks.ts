@@ -71,7 +71,7 @@ export async function launchTask(raw: TaskLaunch, paseo: PaseoApi, store = new A
     labels: { [TASK_LABEL]: "true", [PLUGIN_LABEL]: "true", [INPUT_LABEL]: JSON.stringify(input) },
     prompt: buildOrchestrationPrompt({
       task: input.task,
-      projects,
+      projects: input.projects,
       isolation: input.isolation,
       agent: input.config,
       attachments,

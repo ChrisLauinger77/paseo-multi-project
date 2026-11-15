@@ -15,6 +15,25 @@ import { access, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { archiveTask } from "../server/archive";
 
+test("keeps an unchanged launch retry stable after a registry project rename", async () => {
+  const f = await fixture();
+  try {
+    const coordinator = await f.launch();
+    const projectId = f.request.projects[0]!.projectId;
+    await f.driver.renameProject(projectId, "Renamed after launch");
+    expect(
+      (await f.paseo.projects.list()).projects.find((p) => p.projectId === projectId)
+        ?.projectCustomName,
+    ).toBe("Renamed after launch");
+    expect(await f.launch()).toEqual(coordinator);
+    expect(
+      f.launches.filter((launch) => launch.context?.agentId === coordinator.agentId),
+    ).toHaveLength(1);
+  } finally {
+    await f.close();
+  }
+}, 60000);
+
 test("opens coordinators with invalid input and their children", async () => {
   const f = await fixture(true);
   try {
