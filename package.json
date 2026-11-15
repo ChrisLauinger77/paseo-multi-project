@@ -1,6 +1,6 @@
 {
   "name": "paseo-multi-project",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Coordinate coding tasks across existing Paseo projects.",
   "license": "Apache-2.0",
