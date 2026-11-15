@@ -70,6 +70,46 @@ it("blocks duplicate submission and edits during pending creation", async () => 
   expect(f.getState().pending).toBe(false);
 });
 
+it("prepares a new identity for unchanged input after each successful launch", async () => {
+  const f = ready();
+  let preparations = 0;
+  const ids: string[] = [];
+  const client = {
+    prepare: async () => ({ id: `launch-${++preparations}` }),
+    launch: async (request: { id: string }) => {
+      ids.push(request.id);
+      return { agentId: request.id, workspaceId: "workspace" };
+    },
+  };
+  await f.submit(client);
+  await f.submit(client);
+  expect(preparations).toBe(2);
+  expect(ids).toEqual(["launch-1", "launch-2"]);
+});
+
+it("drops the retry identity only when the server confirms a definite creation failure", async () => {
+  const f = ready();
+  let preparations = 0;
+  const ids: string[] = [];
+  const client = {
+    prepare: async () => ({ id: `launch-${++preparations}` }),
+    launch: async (request: { id: string }) => {
+      ids.push(request.id);
+      if (ids.length === 1)
+        return {
+          error: "Provider startup failed",
+          workspaceId: "old",
+          retryWithNewIdentity: true as const,
+        };
+      return { agentId: "coordinator", workspaceId: "new" };
+    },
+  };
+  expect(await f.submit(client)).toBeNull();
+  expect(f.getState().error).toBe("Provider startup failed");
+  expect(await f.submit(client)).toEqual({ agentId: "coordinator", workspaceId: "new" });
+  expect(ids).toEqual(["launch-1", "launch-2"]);
+});
+
 it("allows choosing Worktree before selecting Git projects", () => {
   const f = createTaskForm();
   f.setIsolation("worktree");

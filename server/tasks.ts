@@ -1,4 +1,5 @@
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
+import type { CreationSnapshot } from "@getpaseo/protocol/messages";
 type PaseoApi = PluginHandlerContext["paseo"];
 type PaseoAgent = Awaited<ReturnType<PaseoApi["agents"]["list"]>>["entries"][number]["agent"];
 import {
@@ -13,6 +14,7 @@ import {
 import { buildOrchestrationPrompt } from "../shared/prompt";
 import { AttachmentStore, isVisionImage } from "./attachments";
 import { listProjects, validateTargets } from "./projects";
+import { archiveEmptyWorkspaces } from "./workspace-cleanup";
 
 export function deriveTitle(task: string) {
   return task.trim().split(/\r?\n/)[0]!.replace(/\s+/g, " ").slice(0, 60);
@@ -60,24 +62,55 @@ export async function launchTask(raw: TaskLaunch, paseo: PaseoApi, store = new A
     source: { kind: "directory", path: first.projectRootPath, projectId: first.projectId },
     idempotencyKey: `multi-project:${input.id}:context`,
   });
-  const coordinator = await workspace.agents.create({
-    config: agentConfig,
-    title: deriveTitle(input.task),
-    attachments: attachments.map((file) => ({ type: "uploaded_file" as const, ...file })),
-    images: files
-      .filter((file) => isVisionImage(file.mimeType))
-      .map((file) => ({ data: file.bytes.toString("base64"), mimeType: file.mimeType })),
-    idempotencyKey: `multi-project:${input.id}:coordinator`,
-    labels: { [TASK_LABEL]: "true", [PLUGIN_LABEL]: "true", [INPUT_LABEL]: JSON.stringify(input) },
-    prompt: buildOrchestrationPrompt({
-      task: input.task,
-      projects,
-      isolation: input.isolation,
-      agent: input.config,
-      attachments,
-    }),
-  });
-  return { agentId: coordinator.id, workspaceId: workspace.id };
+  let creation: CreationSnapshot | undefined;
+  try {
+    const coordinator = await workspace.agents.create({
+      onEvent: (snapshot) => {
+        creation = snapshot;
+      },
+      config: agentConfig,
+      title: deriveTitle(input.task),
+      attachments: attachments.map((file) => ({ type: "uploaded_file" as const, ...file })),
+      images: files
+        .filter((file) => isVisionImage(file.mimeType))
+        .map((file) => ({ data: file.bytes.toString("base64"), mimeType: file.mimeType })),
+      idempotencyKey: `multi-project:${input.id}:coordinator`,
+      labels: {
+        [TASK_LABEL]: "true",
+        [PLUGIN_LABEL]: "true",
+        [INPUT_LABEL]: JSON.stringify(input),
+      },
+      prompt: buildOrchestrationPrompt({
+        task: input.task,
+        projects: input.projects,
+        isolation: input.isolation,
+        agent: input.config,
+        attachments,
+      }),
+    });
+    return { agentId: coordinator.id, workspaceId: workspace.id };
+  } catch (error) {
+    // Only an explicit daemon failure before registration permits a new identity.
+    // Missing progress, lost responses and partially created agents remain ambiguous.
+    if (
+      creation?.phase !== "failed" ||
+      creation.outcomeUnknown !== false ||
+      creation.failedStage !== "agent" ||
+      creation.agent
+    )
+      throw error;
+    const cleanupErrors = await archiveEmptyWorkspaces(new Set([workspace.id]), paseo, {
+      requireNoAgents: true,
+    });
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      error: cleanupErrors.length
+        ? `${message} Workspace cleanup: ${cleanupErrors.join("; ")}`
+        : message,
+      workspaceId: workspace.id,
+      retryWithNewIdentity: true as const,
+    };
+  }
 }
 
 function summary(agent: PaseoAgent) {

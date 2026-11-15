@@ -3,7 +3,11 @@ import { listTaskAgents } from "./tasks";
 
 type PaseoApi = PluginHandlerContext["paseo"];
 
-export async function archiveEmptyWorkspaces(workspaceIds: Set<string>, paseo: PaseoApi) {
+export async function archiveEmptyWorkspaces(
+  workspaceIds: Set<string>,
+  paseo: PaseoApi,
+  options: { requireNoAgents?: boolean } = {},
+) {
   const errors: string[] = [];
   for (const workspaceId of workspaceIds) {
     let name = workspaceId;
@@ -26,8 +30,17 @@ export async function archiveEmptyWorkspaces(workspaceIds: Set<string>, paseo: P
       name = `${snapshot.projectDisplayName} / ${snapshot.title || snapshot.name}`;
       if ((await workspace.terminals.list()).entries.length) continue;
       // Re-read after agent archival, including hidden agents and every page.
-      const agents = await listTaskAgents(paseo, { includeInternal: true });
-      if (agents.some((agent) => !agent.archivedAt && agent.workspaceId === workspaceId)) continue;
+      const agents = await listTaskAgents(paseo, {
+        includeInternal: true,
+        ...(options.requireNoAgents ? { includeArchived: true } : {}),
+      });
+      if (
+        agents.some(
+          (agent) =>
+            agent.workspaceId === workspaceId && (options.requireNoAgents || !agent.archivedAt),
+        )
+      )
+        continue;
       const result = await workspace.archive();
       if (result.error || !result.archivedAt)
         throw new Error(result.error || "Workspace archival was not confirmed.");

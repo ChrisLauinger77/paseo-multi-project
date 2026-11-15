@@ -10,6 +10,7 @@ import { ArchiveTask } from "./archive-task";
 import { ProjectPicker } from "./project-picker";
 import { TaskAttachments } from "./attachments";
 import { TaskSettings } from "./task-settings";
+import { createTaskRefresh } from "./task-refresh";
 
 export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const [form] = useState(createTaskForm);
@@ -24,8 +25,16 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const [watchError, setWatchError] = useState<string | null>(null);
   const [archiveErrors, setArchiveErrors] = useState<string[]>([]);
   const [watchVersion, setWatchVersion] = useState(0);
+  const [watchReady, setWatchReady] = useState(false);
   const catalog = useQuery({ queryKey: ["catalog"], queryFn: () => readCatalog({}), retry: false });
-  const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => readTasks({}), retry: false });
+  const tasks = useQuery({
+    queryKey: ["tasks"],
+    queryFn: () => readTasks({}),
+    enabled: watchReady,
+    // Re-enabling after subscription retry must refetch regardless of host query defaults.
+    staleTime: 0,
+    retry: false,
+  });
   const projects = catalog.data?.projects || [];
   const selectedProvider = catalog.data?.providers.find((p) => p.id === state.config?.provider);
   const selectedModel = selectedProvider?.models.find((m) => m.id === state.config?.model);
@@ -46,7 +55,11 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   useEffect(() => {
     const lifetime = new AbortController();
     let release: (() => Promise<void>) | undefined;
+    const refresh = createTaskRefresh(() => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    });
     setWatchError(null);
+    setWatchReady(false);
     void paseo.agents
       .list({ subscribe: {}, signal: lifetime.signal })
       .then(async ({ subscription }) => {
@@ -56,21 +69,23 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         }
         release = () => subscription!.release();
         subscription!.subscribe({
-          snapshot: () => {
-            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          },
-          update: () => {
-            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          },
+          snapshot: refresh.snapshot,
+          update: refresh.update,
           error: (error) => setWatchError(String(error)),
         });
+        // The first task read follows the observation, closing the initial snapshot gap.
+        setWatchReady(true);
       })
       .catch((error) => {
-        if (!lifetime.signal.aborted)
+        if (!lifetime.signal.aborted) {
           setWatchError(error instanceof Error ? error.message : String(error));
+          // Still allow a task read when live observation is unavailable.
+          setWatchReady(true);
+        }
       });
     return () => {
       lifetime.abort();
+      refresh.dispose();
       void release?.();
     };
   }, [paseo, queryClient, watchVersion]);

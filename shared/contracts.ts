@@ -57,7 +57,10 @@ export const uploadAttachmentRpc = defineRpc({
 });
 export const importAttachmentRpc = defineRpc({
   name: "attachments.import",
-  input: z.object({ path: z.string().min(1).max(4096) }),
+  input: z.object({
+    path: z.string().min(1).max(4096),
+    maxBytes: z.number().int().positive().max(MAX_ATTACHMENT_BYTES).optional(),
+  }),
   output: attachmentSchema,
 });
 
@@ -112,8 +115,16 @@ export const catalogRpc = defineRpc({
 export const launchRpc = defineRpc({
   name: "tasks.launch",
   input: launchSchema,
-  output: z.object({ agentId: z.string(), workspaceId: z.string() }),
+  output: z.union([
+    z.object({ agentId: z.string(), workspaceId: z.string() }),
+    z.object({
+      error: z.string(),
+      workspaceId: z.string(),
+      retryWithNewIdentity: z.literal(true),
+    }),
+  ]),
 });
+export type TaskLaunchResult = z.infer<typeof launchRpc.output>;
 export const featuresRpc = defineRpc({
   name: "features.read",
   input: z.object({ config: agentConfigSchema, cwd: z.string() }),

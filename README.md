@@ -47,7 +47,7 @@ Use this plugin action for the worker choice. Paseo 0.15.4 does not expose a plu
 
 The coordinator uses Paseo tools to prepare targets and start children; it does not change repositories itself. Worktree failures stay failures. Permission requests remain pending user actions in Paseo; the plugin never grants them. The coordinator's final answer is the consolidated result in its ordinary chat.
 
-A failed launch keeps the input and attachment references and shows an error. An unchanged retry reuses the daemon's creation identities while the form remains open. If you reload after an ambiguous failure, check Recent tasks before starting again: an already-created coordinator may be there.
+A failed launch keeps the input and attachment references and shows an error. After a failed attempt, an unchanged retry reuses the daemon's creation identities while the form remains open, unless the daemon confirms coordinator creation failed before registering an agent. For that definite failure, the plugin attempts to archive the context workspace using the same Local workspace safety guards, requiring no agents at all (including archived agents), terminals, running services or setup; the next submit gets fresh creation identities. Skipped or failed cleanup can leave a Local workspace entry, which you can inspect in Paseo's workspace menu. Ambiguous failures keep the workspace and retry identities. If you reload after an ambiguous failure, check Recent tasks before starting again: an already-created coordinator may be there.
 
 ## Existing fork users
 
@@ -59,7 +59,7 @@ Do not delete agents, workspaces or the fork branches as part of initial testing
 
 The plugin reads the current host's registered projects, provider catalog/configuration, and agent records. It stores task identity and selected input as labels on the coordinator; Paseo stores prompts and agent history normally. Project names/paths, the task, attachments and worker results are sent to the configured agent providers as part of normal operation. There is no separate hosted plugin service, telemetry or additional API key.
 
-Attachment copies and integrity metadata are saved on the daemon host under `~/.paseo-multi-project/attachments`. The plugin does not write them into selected repositories or modify original files. Copies remain for conversation history and resume, including after draft removal, task archive or plugin removal. Task labels store references and file metadata, not file bytes. Set `PASEO_MULTI_PROJECT_DATA_DIR` in the daemon environment to choose another attachment directory; tests always use a temporary directory.
+Attachment copies and integrity metadata are saved on the daemon host under `~/.paseo-multi-project/attachments`. The plugin does not write them into selected repositories or modify original files. Copies are never pruned automatically: removed drafts and failed launches still leave copies, as do task archival and plugin removal. Delete a copy only when no task or retry needs it. Deleting a copy that a coordinator references, including an archived coordinator, makes that task's attachment tool and launch retries fail. Task labels store references and file metadata, not file bytes. Set `PASEO_MULTI_PROJECT_DATA_DIR` in the daemon environment to choose another attachment directory; tests always use a temporary directory.
 
 This version uses a plugin-owned screen/sidebar entry rather than modifying the built-in New Workspace form or workspace grouping. Interface text is currently English.
 
@@ -75,7 +75,7 @@ Start with [AGENTS.md](AGENTS.md) for contributor instructions and [architecture
 | `shared/`                             | RPC schemas, labels, limits and orchestration prompt                                               |
 | `tests/`                              | Isolated stock-daemon fixture, compatibility tests, browser tests and optional real-provider smoke |
 
-Use Node 22.20.0 or a compatible Node 22 release:
+Use the Node 22 version pinned in [.github/workflows/ci.yml](.github/workflows/ci.yml):
 
 ```sh
 npm ci

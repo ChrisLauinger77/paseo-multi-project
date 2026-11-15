@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { fixture, TASK_LABEL, deferred } from "./fixture";
+import { fixture, TASK_LABEL, PLUGIN_LABEL, deferred } from "./fixture";
 import {
   DISCOVERY_TOOL,
   ATTACHMENTS_TOOL,
@@ -8,12 +8,186 @@ import {
   attachmentSchema,
   INPUT_LABEL,
   MAX_ATTACHMENT_BYTES,
+  launchRpc,
+  prepareRpc,
+  type TaskLaunch,
+  type TaskLaunchResult,
 } from "../shared/contracts";
 import { readFileSync } from "node:fs";
 import { AttachmentStore } from "../server/attachments";
-import { access, writeFile, readFile } from "node:fs/promises";
+import { access, writeFile, readFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { archiveTask } from "../server/archive";
+import { launchTask } from "../server/tasks";
+import { createTaskForm } from "../client/form";
+import { archiveEmptyWorkspaces } from "../server/workspace-cleanup";
+import type { CreationSnapshot } from "@getpaseo/protocol/messages";
+
+test("cleans a definite startup failure and retries unchanged input with a fresh identity", async () => {
+  const f = await fixture();
+  try {
+    f.sessionFailures.remaining = 1;
+    const form = createTaskForm();
+    form.setTask("FAIL_COORDINATOR_START");
+    for (const project of f.request.projects) form.toggleProject(project);
+    form.setConfig(f.request.config);
+    const requests: TaskLaunch[] = [];
+    const replies: TaskLaunchResult[] = [];
+    const client = {
+      prepare: async () => prepareRpc.output.parse(await f.rpc(prepareRpc.name, {})),
+      launch: async (input: TaskLaunch) => {
+        requests.push(input);
+        const reply = launchRpc.output.parse(await f.rpc(launchRpc.name, input));
+        replies.push(reply);
+        return reply;
+      },
+    };
+    expect(await form.submit(client)).toBeNull();
+    expect(form.getState().error).toContain("Test provider rejected coordinator startup");
+    const failed = replies[0]!;
+    expect(failed).toMatchObject({ retryWithNewIdentity: true });
+    expect(await f.paseo.workspaces.ref(failed.workspaceId).refresh()).toBeNull();
+    expect(
+      (
+        await f.paseo.agents.list({
+          filter: { includeArchived: true, includeInternal: true },
+          includeBackground: true,
+        })
+      ).entries,
+    ).toEqual([]);
+    await access(path.join(f.request.projects[0]!.projectRootPath, ".git"));
+    // If the failure reply was lost, an old-identity replay must still tell the client
+    // to reset, despite the daemon returning the completed, now-archived workspace.
+    const replay = launchRpc.output.parse(await f.rpc(launchRpc.name, requests[0]!));
+    expect(replay).toMatchObject({ retryWithNewIdentity: true, workspaceId: failed.workspaceId });
+    expect(await f.paseo.workspaces.ref(failed.workspaceId).refresh()).toBeNull();
+    const retried = await form.submit(client);
+    expect(retried).not.toBeNull();
+    expect(requests[1]!.id).not.toBe(requests[0]!.id);
+    expect(retried!.workspaceId).not.toBe(failed.workspaceId);
+    expect(await f.paseo.workspaces.ref(retried!.workspaceId).refresh()).not.toBeNull();
+    expect((await f.tools(retried!.agentId)).names()).toContain(DISCOVERY_TOOL);
+  } finally {
+    await f.close();
+  }
+}, 60000);
+
+test.each(["completed", "missing", "outcome unknown"])(
+  "keeps context and the creation identity after an ambiguous coordinator response, progress=%s",
+  async (progress) => {
+    const f = await fixture();
+    try {
+      let workspaceId: string | undefined;
+      const interrupted = {
+        ...f.paseo,
+        workspaces: {
+          ...f.paseo.workspaces,
+          async create(input: Parameters<typeof f.paseo.workspaces.create>[0]) {
+            const workspace = await f.paseo.workspaces.create(input);
+            workspaceId = workspace.id;
+            return {
+              ...workspace,
+              agents: {
+                async create(input: Parameters<typeof workspace.agents.create>[0]) {
+                  let creation: CreationSnapshot | undefined;
+                  await workspace.agents.create({
+                    ...input,
+                    onEvent: (snapshot) => {
+                      creation = snapshot;
+                      if (progress === "completed") input.onEvent?.(snapshot);
+                    },
+                  });
+                  // Fault injection at the public SDK boundary, without altering daemon state.
+                  if (progress === "outcome unknown")
+                    input.onEvent?.({
+                      ...creation!,
+                      phase: "failed",
+                      failedStage: "agent",
+                      outcomeUnknown: true,
+                      agent: undefined,
+                      error: "Outcome unknown",
+                    });
+                  throw new Error("Response lost after coordinator creation");
+                },
+              },
+            };
+          },
+        },
+      };
+      await expect(
+        launchTask(f.request, interrupted, new AttachmentStore(f.attachmentDirectory)),
+      ).rejects.toThrow("Response lost");
+      expect(await f.paseo.workspaces.ref(workspaceId!).refresh()).not.toBeNull();
+      const retried = await f.launch();
+      expect(retried.workspaceId).toBe(workspaceId);
+      expect((await f.paseo.agents.list()).entries.map((entry) => entry.agent.id)).toEqual([
+        retried.agentId,
+      ]);
+    } finally {
+      await f.close();
+    }
+  },
+  60000,
+);
+
+test("requires no agents of any kind when cleaning failed-launch context", async () => {
+  const f = await fixture();
+  try {
+    const workspace = await f.paseo.workspaces.create({
+      source: { kind: "directory", path: f.request.projects[0]!.projectRootPath },
+    });
+    const agent = await workspace.agents.create({ config: { provider: "codex/gpt-5.4-mini" } });
+    await agent.archive();
+    expect(
+      await archiveEmptyWorkspaces(new Set([workspace.id]), f.paseo, { requireNoAgents: true }),
+    ).toEqual([]);
+    expect(await workspace.refresh()).not.toBeNull();
+  } finally {
+    await f.close();
+  }
+}, 60000);
+
+test("keeps an unchanged launch retry stable after a registry project rename", async () => {
+  const f = await fixture();
+  try {
+    const coordinator = await f.launch();
+    const projectId = f.request.projects[0]!.projectId;
+    await f.driver.renameProject(projectId, "Renamed after launch");
+    expect(
+      (await f.paseo.projects.list()).projects.find((p) => p.projectId === projectId)
+        ?.projectCustomName,
+    ).toBe("Renamed after launch");
+    expect(await f.launch()).toEqual(coordinator);
+    expect(
+      f.launches.filter((launch) => launch.context?.agentId === coordinator.agentId),
+    ).toHaveLength(1);
+  } finally {
+    await f.close();
+  }
+}, 60000);
+
+test("opens coordinators with invalid input and their children", async () => {
+  const f = await fixture(true);
+  try {
+    const workspace = await f.paseo.workspaces.create({
+      source: { kind: "directory", path: f.request.projects[0]!.projectRootPath },
+    });
+    const coordinator = await workspace.agents.create({
+      config: { provider: "codex/gpt-5.4-mini" },
+      labels: { [PLUGIN_LABEL]: "true", [INPUT_LABEL]: "invalid JSON" },
+    });
+    const tools = await f.tools(coordinator.id);
+    expect(tools.names()).toContain(DISCOVERY_TOOL);
+    expect(tools.names()).not.toContain(ATTACHMENTS_TOOL);
+    const child = await workspace.agents.create({
+      config: { provider: "codex/gpt-5.4-mini" },
+      parent: coordinator.id,
+    });
+    expect((await f.tools(child.id)).names()).not.toContain(ATTACHMENTS_TOOL);
+  } finally {
+    await f.close();
+  }
+}, 60000);
 
 test.each([false, true])(
   "stock 0.15.4 plugin orchestration over native=%s",
@@ -492,6 +666,29 @@ test.each([false, true])(
   60000,
 );
 
+test("rejects host imports above the remaining budget without leaving a stored directory", async () => {
+  const f = await fixture();
+  try {
+    await mkdir(f.attachmentDirectory, { recursive: true });
+    const hostPath = path.join(f.root, "requirements.txt");
+    await writeFile(hostPath, "Task requirements");
+    const before = await readdir(f.attachmentDirectory);
+    await expect(f.rpc("attachments.import", { path: hostPath, maxBytes: 1 })).rejects.toThrow(
+      "remaining task attachment budget",
+    );
+    for (const maxBytes of [0, -1, 1.5, MAX_ATTACHMENT_BYTES + 1])
+      await expect(f.rpc("attachments.import", { path: hostPath, maxBytes })).rejects.toThrow();
+    expect(await readdir(f.attachmentDirectory)).toEqual(before);
+    const imported = attachmentSchema.parse(
+      await f.rpc("attachments.import", { path: hostPath, maxBytes: 17 }),
+    );
+    expect(imported.size).toBe(17);
+    expect(await readdir(f.attachmentDirectory)).toEqual([imported.id]);
+  } finally {
+    await f.close();
+  }
+}, 60000);
+
 test("rejects bad or missing attachments before starting an agent", async () => {
   const f = await fixture();
   try {
@@ -509,6 +706,18 @@ test("rejects bad or missing attachments before starting an agent", async () => 
     const large = path.join(f.root, "large.txt");
     await writeFile(large, Buffer.alloc(MAX_ATTACHMENT_BYTES + 1));
     await expect(f.rpc("attachments.import", { path: large })).rejects.toThrow("5 MiB");
+    // Bypass the fixture's client-side launch parser to verify the server's total limit.
+    await expect(
+      f.rpc(launchRpc.name, {
+        ...f.request,
+        attachments: Array.from({ length: 5 }, (_, index) => ({
+          id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+          fileName: `reference-${index}.txt`,
+          mimeType: "text/plain",
+          size: index < 4 ? MAX_ATTACHMENT_BYTES : 1,
+        })),
+      }),
+    ).rejects.toThrow("Attachments must total 20 MiB or less");
     const file = attachmentSchema.parse(
       await f.rpc("attachments.upload", {
         fileName: "requirements.txt",

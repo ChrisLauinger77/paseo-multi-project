@@ -30,7 +30,7 @@ Paseo packages are pinned development dependencies; the stock host compiles and 
 
 Run npm run typecheck and npm run lint after changes, focused tests for changed behavior, and npm run format before commits. Use npm scripts for formatting/linting. Keep stock daemon integration tests sequential. Browser tests must use a real isolated daemon and browser. Do not install or enable the plugin on a user's normal daemon without permission.
 
-CI uses Node 22.20.0 (see README.md). `npm test` runs unit and compatibility tests; browser tests run separately with `npm run test:browser`. Use `npm run test:compat` for RPC, tool, lifecycle or packaging changes and `npm run test:browser` for UI changes. `npm run test:real` is an explicit opt-in smoke that uses normal Codex credentials and paid provider usage; it is excluded from the default suite and CI.
+CI uses the Node 22 version pinned in `.github/workflows/ci.yml` (see README.md). `npm test` runs unit and compatibility tests; browser tests run separately with `npm run test:browser`. Use `npm run test:compat` for RPC, tool, lifecycle or packaging changes and `npm run test:browser` for UI changes. `npm run test:real` is an explicit opt-in smoke that uses normal Codex credentials and paid provider usage; it is excluded from the default suite and CI.
 
 ## Releases
 

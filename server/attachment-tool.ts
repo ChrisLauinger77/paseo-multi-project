@@ -1,19 +1,8 @@
 import { z } from "zod";
 import { defineAgentTool } from "@getpaseo/plugin/server";
-import {
-  ATTACHMENTS_TOOL,
-  INPUT_LABEL,
-  PLUGIN_LABEL,
-  launchSchema,
-  type TaskAttachment,
-} from "../shared/contracts";
+import { ATTACHMENTS_TOOL, type TaskAttachment } from "../shared/contracts";
 import type { AttachmentStore } from "./attachments";
 
-export function coordinatorAttachments(labels: Readonly<Record<string, string>>): TaskAttachment[] {
-  if (labels[PLUGIN_LABEL] !== "true") return [];
-  const request = launchSchema.parse(JSON.parse(labels[INPUT_LABEL] || "null"));
-  return request.attachments || [];
-}
 export function attachmentTool(files: readonly TaskAttachment[], store: AttachmentStore) {
   return defineAgentTool({
     name: ATTACHMENTS_TOOL,

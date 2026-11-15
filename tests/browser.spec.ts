@@ -4,6 +4,112 @@ import { TASK_LABEL, INPUT_LABEL, MAX_ATTACHMENT_BYTES } from "../shared/contrac
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+for (const observationFails of [false, true]) {
+  test(`reads tasks after observation settles, observation failure=${observationFails}`, async ({
+    page,
+  }) => {
+    const f = await fixture();
+    try {
+      const serverId = f.daemon.daemon.getServerId();
+      const endpoint = `127.0.0.1:${f.daemon.port}`;
+      let observationRequestId: string | undefined;
+      let releaseObservation: (() => void) | undefined;
+      let observationSettled = false;
+      let taskReads = 0;
+      const readsBeforeObservation: string[] = [];
+      await page.routeWebSocket(/\/ws(?:\?|$)/, (route) => {
+        const server = route.connectToServer();
+        route.onMessage((data) => {
+          const text = data.toString();
+          if (text.startsWith("{")) {
+            const message = findRpc(JSON.parse(text));
+            if (message?.type === "plugin.rpc.invoke.request") {
+              if (message.method === "tasks.list") {
+                taskReads++;
+                if (!observationSettled) readsBeforeObservation.push(message.requestId);
+              }
+            }
+            if (
+              message?.type === "fetch_agents_request" &&
+              message.subscribe &&
+              !message.filter &&
+              !message.page &&
+              !observationRequestId
+            ) {
+              observationRequestId = message.requestId;
+              releaseObservation = () => server.send(data);
+              return;
+            }
+          }
+          server.send(data);
+        });
+        server.onMessage((data) => {
+          const text = data.toString();
+          if (text.startsWith("{")) {
+            const envelope = JSON.parse(text);
+            const message = findRpc(envelope);
+            // Only the initial snapshot can reveal the task created during the gap.
+            if (message?.type === "agent_update") return;
+            if (
+              message?.type === "fetch_agents_response" &&
+              message.payload.requestId === observationRequestId
+            ) {
+              observationSettled = true;
+              if (observationFails)
+                Object.assign(message, {
+                  type: "rpc_error",
+                  payload: {
+                    requestId: observationRequestId,
+                    error: "Test observation unavailable",
+                  },
+                });
+              route.send(JSON.stringify(envelope));
+              return;
+            }
+          }
+          route.send(data);
+        });
+      });
+      await page.addInitScript(
+        ({ serverId, endpoint }) => {
+          const connection = { id: `direct:${endpoint}`, type: "directTcp", endpoint };
+          localStorage.setItem(
+            "@paseo:daemon-registry",
+            JSON.stringify([
+              {
+                serverId,
+                label: "Plugin test",
+                connections: [connection],
+                preferredConnectionId: connection.id,
+                createdAt: new Date(0).toISOString(),
+                updatedAt: new Date(0).toISOString(),
+              },
+            ]),
+          );
+          localStorage.setItem(
+            "@paseo:onboarding",
+            JSON.stringify({ completedAt: new Date(0).toISOString() }),
+          );
+        },
+        { serverId, endpoint },
+      );
+      await page.goto(`http://${endpoint}/h/${serverId}/plugin/paseo-multi-project/surface/tasks`);
+      await expect(page.getByTestId("multi-project-screen")).toBeVisible();
+      await expect.poll(() => Boolean(releaseObservation)).toBe(true);
+      expect(taskReads).toBe(0);
+      const coordinator = await f.launch({ ...f.request, task: "Task created before observation" });
+      releaseObservation!();
+      await expect(page.getByTestId(`multi-project-task-${coordinator.agentId}`)).toBeVisible();
+      expect(readsBeforeObservation).toEqual([]);
+      expect(taskReads).toBe(1);
+      if (observationFails)
+        await expect(page.getByRole("alert")).toContainText("Test observation unavailable");
+    } finally {
+      await f.close();
+    }
+  });
+}
+
 for (const compact of [false, true]) {
   test(`stock browser ${compact ? "compact" : "desktop"}: compact form, refresh, launch and archive recovery`, async ({
     page,
@@ -352,12 +458,29 @@ type BrowserRpc =
       requestId: string;
       input: { agentId?: string };
     }
-  | { type: "plugin.rpc.invoke.response"; payload: { requestId: string; output: unknown } };
+  | { type: "plugin.rpc.invoke.response"; payload: { requestId: string; output: unknown } }
+  | {
+      type: "fetch_agents_request";
+      requestId: string;
+      subscribe?: object;
+      filter?: object;
+      page?: object;
+    }
+  | { type: "fetch_agents_response"; payload: { requestId: string } }
+  | { type: "agent_update" };
 
 function findRpc(value: unknown): BrowserRpc | undefined {
   if (!value || typeof value !== "object") return;
   const record = value as Record<string, unknown>;
-  if (record.type === "plugin.rpc.invoke.request" || record.type === "plugin.rpc.invoke.response")
+  if (
+    [
+      "plugin.rpc.invoke.request",
+      "plugin.rpc.invoke.response",
+      "fetch_agents_request",
+      "fetch_agents_response",
+      "agent_update",
+    ].includes(record.type as string)
+  )
     return value as BrowserRpc;
   for (const child of Object.values(record)) {
     const rpc = findRpc(child);
