@@ -31,6 +31,8 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
     queryKey: ["tasks"],
     queryFn: () => readTasks({}),
     enabled: watchReady,
+    // Re-enabling after subscription retry must refetch regardless of host query defaults.
+    staleTime: 0,
     retry: false,
   });
   const projects = catalog.data?.projects || [];
