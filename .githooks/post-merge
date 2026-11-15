@@ -1,0 +1,15 @@
+#!/bin/sh
+# Refresh dependencies after a pull changed package.json or package-lock.json.
+# npm ci installs exactly what the lock file lists and never rewrites it, so a
+# newer local npm cannot change the npm 10 lock file that CI and Renovate use.
+changed=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD) || exit 0
+
+if echo "$changed" | grep -qE '^(package\.json|package-lock\.json)$'; then
+  echo "package.json or package-lock.json changed, running npm ci..."
+  npm ci --no-audit --no-fund || exit $?
+
+  if git diff ORIG_HEAD HEAD -- package.json | grep -qE '^[-+].*"@playwright/test"'; then
+    echo "@playwright/test changed, installing the matching Chromium..."
+    npx playwright install chromium
+  fi
+fi

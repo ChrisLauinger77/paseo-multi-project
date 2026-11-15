@@ -86,6 +86,8 @@ npx playwright install chromium
 npm run test:browser
 ```
 
+To refresh dependencies automatically after `git pull`, enable the repository hooks once with `git config core.hooksPath .githooks`. When a pull changes `package.json` or `package-lock.json`, they run `npm ci`, and they install the matching Chromium when `@playwright/test` changes. `npm ci` leaves the lock file unchanged; it is kept compatible with the npm 10 release bundled with Node 22.
+
 `npm test` runs the unit and compatibility suites sequentially. Browser tests run separately. These suites also run in CI. Run `npm run format` to format changes and `npm run format:check` to check formatting.
 
 The compatibility and browser tests use the unmodified published `@getpaseo/server@0.15.4`, temporary projects/homes and OS-assigned ports. They never connect to your normal daemon. The typed provider adapter is supplied by the stock package; its fixture imports are confined to tests. Compatibility tests also pack and load the plugin without its development `node_modules`, verifying that the stock host can compile the distributed source.
