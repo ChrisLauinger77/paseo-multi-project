@@ -17,7 +17,7 @@ The plugin is experimental. Automated browser checks cover Linux desktop and com
 Install on the machine running the daemon:
 
 ```sh
-paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.2
+paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.3
 paseo plugin ls
 ```
 
