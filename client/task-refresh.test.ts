@@ -43,6 +43,32 @@ it("keeps updates that arrive before the initial snapshot", () => {
   vi.advanceTimersByTime(750);
   expect(invalidate).toHaveBeenCalledTimes(1);
 });
+it("refreshes at least every two seconds while updates continue", () => {
+  const invalidate = vi.fn();
+  const refresh = createTaskRefresh(invalidate);
+  refresh.snapshot();
+  for (let i = 0; i < 16; i++) {
+    refresh.update();
+    vi.advanceTimersByTime(250);
+    expect(invalidate).toHaveBeenCalledTimes(Math.floor((i + 1) / 8));
+  }
+  expect(invalidate).toHaveBeenCalledTimes(2);
+});
+it("clears the maximum wait after a trailing refresh", () => {
+  const invalidate = vi.fn();
+  const refresh = createTaskRefresh(invalidate);
+  refresh.update();
+  vi.advanceTimersByTime(750);
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(750);
+  refresh.update();
+  vi.advanceTimersByTime(500);
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(250);
+  expect(invalidate).toHaveBeenCalledTimes(2);
+  vi.runAllTimers();
+  expect(invalidate).toHaveBeenCalledTimes(2);
+});
 it("cancels pending refreshes and ignores events after cleanup", () => {
   const invalidate = vi.fn();
   const refresh = createTaskRefresh(invalidate);
