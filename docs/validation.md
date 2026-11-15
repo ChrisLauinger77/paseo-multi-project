@@ -1,0 +1,13 @@
+# Validation
+
+Baseline: unmodified published Paseo 0.15.4 packages, Node 22.20.0, Linux x86_64. No changes were made to the Paseo repository or the normal daemon.
+
+- `npm run test:unit`: 8 tests passed. Covers target validation, Worktree gating, required inputs, duplicate submission, frozen pending input and identical retry after a lost response.
+- `npm run test:compat`: 4 tests passed. Real isolated stock daemon, plugin subprocess/compiler, and SDK transport; typed test provider adapter. Exercises MCP and native tool catalogs, scoped discovery, Local/Worktree creation, parent links, concurrent completion envelopes, idempotent coordinator creation, stale targets and disabled host tools. A packed copy without development node_modules is also compiled and loaded by the stock host.
+- `npm run test:browser`: 2 tests passed. The stock package's real web UI and Chromium, with a real isolated daemon. Desktop and compact project selection, isolation gating, policy failure visible in the form, successful retry, coordinator navigation and task listing.
+- `npm run typecheck` and `npm run lint`: passed.
+- `PASEO_SMOKE_MODE=full-access npm run test:real`: 1 test passed in 51.28 seconds with installed Codex 0.169.0 / gpt-6.1-sol. The user explicitly approved Full access for these throwaway test agents. A real coordinator launched two children, each returned PROJECT_CHECK after reading its README, and the coordinator's final assistant answer contained COORDINATOR_RESULT for both projects. Both Git working trees remained clean. The earlier Auto run stopped at a tool permission request without granting it.
+
+These are separate forms of evidence. Test adapters validate the transport/lifecycle integration, not a language model's adherence to the coordinator prompt. The real-provider smoke validates model-driven delegation. Neither substitutes for native-device testing.
+
+Native iOS/Android, other operating systems and additional real providers have not been exercised. The current manifest deliberately excludes newer Paseo minor versions until their public APIs are checked.

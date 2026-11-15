@@ -1,0 +1,9 @@
+{
+  "id": "paseo-multi-project",
+  "name": "Multi-project tasks",
+  "description": "Coordinate coding tasks across existing Paseo projects.",
+  "requirements": {
+    "paseo": ">=0.15.4 <0.16.0"
+  },
+  "media": ["assets/screenshot.png"]
+}

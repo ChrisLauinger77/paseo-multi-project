@@ -1,0 +1,7 @@
+Paseo multi-project
+Copyright 2026 Christian Lauinger and contributors.
+
+shared/prompt.ts adapts the multi-project orchestration prompt from
+ChrisLauinger77/paseo (feat/multi-project-tasks, commit 7f2b45752),
+based on getpaseo/paseo. Paseo and this plugin are licensed under Apache-2.0.
+See LICENSE for the license text.
