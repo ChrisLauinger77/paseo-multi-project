@@ -26,6 +26,8 @@ Attachment bytes stay in the plugin-owned store, outside repositories and coordi
 
 Paseo packages are pinned development dependencies; the stock host compiles and loads the distributed source without the plugin's development `node_modules`. Keep stock-package internal imports confined to `tests/`. When changing the Paseo baseline, check the manifest range, dependency pins, test version assertions/configuration and documentation together before claiming support.
 
+The README's Paseo badge tracks support across all plugin releases. Keep its lower bound fixed at **0.15**. Only extend the upper bound when support for a newer Paseo minor series is established. Older support remains represented even if future plugin releases raise their minimum requirement.
+
 ## Checks
 
 Run npm run typecheck and npm run lint after changes, focused tests for changed behavior, and npm run format before commits. Use npm scripts for formatting/linting. Keep stock daemon integration tests sequential. Browser tests must use a real isolated daemon and browser. Do not install or enable the plugin on a user's normal daemon without permission.
