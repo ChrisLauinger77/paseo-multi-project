@@ -1,5 +1,15 @@
 # Validation
 
+## Release 0.1.6 preflight — 2026-11-16
+
+A clean `npm ci` with CI-pinned Node **22.23.5** / npm **10.9.9** on Linux x86_64 was followed by all **51 unit/compatibility tests** (28 unit, 23 compatibility; 54.49 seconds) and all **four Chromium browser tests** (34.9 seconds) passing against the unchanged stock Paseo **0.15.4** development baseline. No tests were skipped. Type checking, linting, formatting and `npm pack --dry-run --ignore-scripts` passed. The package contains 30 files, including the manifest, both runtime entries, all imported runtime modules, updated overview and declared screenshot. The compatibility suite loaded the packed source without development dependencies.
+
+The browser run used installed **Chromium 156.0.8078.79**, selected through an external config at `/workspace/work/paseo-v0.1.6/browser.config.ts`; the tracked Playwright config is unchanged. This retains the documented workaround for the pinned browser download's HTTP 403. Six new screenshots are in `/workspace/paseo-multi-project/artifacts/`; the desktop form and compact archive dialog were visually inspected. The declared `assets/screenshot.png` was also inspected and still shows the current interface with sample data. Command logs are in `/workspace/work/paseo-v0.1.6/logs/`.
+
+The stable **0.16.0** evidence below was completed before the release version bump and is reused for this release. The final requirement remains `>=0.15.0 <0.17.0`, synchronized across the manifest, README and distributed overview. Development dependencies and the default fixture stay at 0.15.4. No 0.15.0 run is claimed. These release changes only synchronize version metadata and the tagged README example; plugin runtime behavior is unchanged.
+
+All release tests used isolated loopback daemons, temporary homes/projects/worktrees/attachments beneath `/workspace/work/paseo-v0.1.6/tmp`, and deterministic provider adapters. No normal daemon was changed, permission requests were not granted, and no real-provider smoke or native-device testing was performed.
+
 ## Stable Paseo 0.16 compatibility — 2026-11-16
 
 Verdict: compatible with unmodified published stable Paseo **0.16.0**, including its matching bundled web app. The final manifest range is `>=0.15.0 <0.17.0`, declaring support for the 0.15 and 0.16 minor series. Patch releases within those series are assumed compatible under the user's policy. No 0.15.0 installation or test was performed; 0.15.4 evidence below is reused, not a new runtime run.
