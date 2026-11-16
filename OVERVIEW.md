@@ -4,7 +4,7 @@ Give one task to several existing Paseo projects. A coordinator prepares Local o
 
 Open the plugin from the sidebar or Command Center. Search projects in a bounded picker, choose Local or Worktree and a provider/model, then expand Agent options for provider-specific settings. Worktree isolation is available only for Git projects. Attach files/images on desktop/web or import a file from the daemon host; shared context is supplied to the coordinator and all project workers. Recent tasks links to coordinators and workers and offers Archive, with a choice to archive workers or keep them as independent agents. Archiving preserves project files and worktrees. Optional cleanup of empty Local workspace entries is off by default and preserves workspaces still in use.
 
-Requires Paseo daemon and app 0.15.4, registered projects, and an available provider with Paseo tools enabled. The initial supported range excludes 0.16.0. The interface is English. Desktop and compact browser layouts are tested; native mobile execution needs verification.
+Requires Paseo daemon and connected app 0.15.x or 0.16.x (`>=0.15.0 <0.17.0`), registered projects, and an available provider with Paseo tools enabled. Verified with 0.15.4 and 0.16.0. The interface is English. Desktop and compact browser layouts are tested; native mobile execution needs verification.
 
 Project names/paths, task text, attachments and worker results are sent to your configured agent providers. The plugin reads project/provider/agent information and stores task input and attachment references on coordinator labels. Paseo stores prompts and agent history. The plugin runs locally on the daemon with the user's access and has no separate hosted service, telemetry or additional API key.
 
