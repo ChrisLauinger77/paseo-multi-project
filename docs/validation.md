@@ -1,5 +1,59 @@
 # Validation
 
+## Stable Paseo 0.16 compatibility — 2026-11-16
+
+Verdict: compatible with unmodified published stable Paseo **0.16.0**, including its matching bundled web app. The final manifest range is `>=0.15.0 <0.17.0`, declaring support for the 0.15 and 0.16 minor series. Patch releases within those series are assumed compatible under the user's policy. No 0.15.0 installation or test was performed; 0.15.4 evidence below is reused, not a new runtime run.
+
+### Environment and release identity
+
+- Plugin: version 0.1.5, starting commit `c47d423cc37cda48b081f32040c9a7621bbabc28` (lock file maintenance).
+- Linux x86_64; CI-pinned Node **22.23.5**, npm **10.9.9**. Tooling was installed in the dedicated test root, with no global installation.
+- Published `@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol` and `@getpaseo/server`: all **0.16.0**, confirmed in the npm-generated target lockfile and installed dependency tree. The server's bundled JavaScript identifies both the Expo manifest and `@getpaseo/app` as **0.16.0**.
+- npm `latest` resolved to 0.16.0 (the `beta` tag also pointed to that same stable version). [Upstream v0.16.0](https://github.com/getpaseo/paseo/releases/tag/v0.16.0) is marked `prerelease: false`, published 2026-11-16 at 06:58:16 UTC. No beta packages or unreleased source were used.
+- Reviewed the release's plugin changes and breaking removal of `agent.turn.after.timeline`. This plugin does not use that field. No plugin runtime changes were required.
+
+### Results
+
+| Check against 0.16.0                                         | Result                                           |
+| ------------------------------------------------------------ | ------------------------------------------------ |
+| Clean `npm ci` from the separately generated target lockfile | Passed                                           |
+| `npm run typecheck`                                          | Passed after test-only fixture adaptations below |
+| `npm run lint`                                               | Passed                                           |
+| `npm run format` / `npm run format:check`                    | Passed                                           |
+| `npm run test:unit`                                          | 28 passed across 4 files                         |
+| `npm run test:compat`                                        | 23 passed, no skips; 70.79 seconds               |
+| `npm run test:browser`                                       | 4 passed, no skips; 37.6 seconds                 |
+| `npm pack --dry-run --ignore-scripts`                        | Passed; 30 distributable files                   |
+
+The unchanged compatibility assertions exercise coordinator discovery, MCP/native tools, Local/Worktree creation, parent links and completion notifications, retries, attachments and scoped delivery, archival with both worker choices, and safe optional Local workspace cleanup. The packed-source case loads the distributed source without development `node_modules`. Browser coverage includes subscription snapshot/failure handling, desktop (1440 × 1000) and compact (390 × 844) flows, file input, task launch, navigation and archive recovery against the real stock daemon and bundled 0.16.0 UI.
+
+The stock protocol's `assertPluginCompatibility` checks the manifest range against the supplied runtime version and its stable core. Both daemon and connected browser app accepted the actual `>=0.15.0 <0.17.0` manifest throughout these runs. There was no prerelease range exception, manifest bypass or patched host.
+
+### Harness adaptations and infrastructure
+
+Changes were confined to the separate 0.16 target installation:
+
+- Set all four direct Paseo development dependencies to exact 0.16.0 and generated the target lockfile using npm 10.9.9.
+- Set fixture `daemonVersion`, driver `appVersion`, package version assertion and descriptive test text to the actual 0.16.0 installation.
+- Removed the obsolete `listFeatures` test-adapter method, which is absent from the 0.16 `AgentClient` type.
+- Added `background: false` and `metadata: {}` to the synthetic session-open request required by the 0.16 hook type. Initial type checking failed on these fixture differences; the adapted target passed. No assertions were weakened or skipped.
+- Playwright's pinned Chromium download (revision 1254 / Chrome for Testing 158.0.8127.18) failed with HTTP 403, `Domain forbidden`. The browser suite passed using installed **Chromium 156.0.8078.79**, selected with temporary target-only `launchOptions.executablePath: "/usr/bin/chromium"`. This is an infrastructure fallback, not evidence for the unavailable pinned browser build.
+
+The final review checkout keeps its original package.json, package-lock.json and default 0.15.4 fixture unchanged. Its clean `npm ci`, type checking, linting, formatting and package dry run also passed. No shared runtime changes introduced a reason to rerun the historical 0.15.4 integration/browser suite.
+
+### Isolation and retained evidence
+
+All new daemons used the stock fixture's loopback address and OS-assigned ports, temporary homes, projects, managed worktrees, attachments and fake-provider history beneath `/workspace/work/paseo-release/tmp`. Daemon suites ran sequentially. Fixture cleanup closed daemons and removed their temporary resources. No normal Paseo daemon/app was changed, no global Paseo packages were installed, no permissions were granted and no real provider credentials or paid models were used. No release or registry submission was performed during validation.
+
+- Review branch: `compat/paseo-0.16-release` at `/workspace/work/paseo-release/review`.
+- Separate 0.16 target checkout: `/workspace/work/paseo-release/target`.
+- Command logs: `/workspace/work/paseo-release/logs`.
+- Target lockfile: `/workspace/work/paseo-release/target/package-lock.json`; complete temporary harness patch: `/workspace/work/paseo-release/evidence/target-harness.patch`.
+- Six screenshots: `/workspace/work/paseo-release/target/artifacts/{desktop,compact}{-form,-archive,}.png`. The desktop and compact form screenshots were visually inspected; they show the stock app hosting the task form. Screenshots cover forms, recent tasks and archive dialogs.
+- Upstream release metadata: `/workspace/work/paseo-release/upstream-release.json`.
+
+These paths describe this managed Linux sandbox, not the user's personal Linux machine. Adapter/browser tests do not establish real-model behavior or native iOS/Android compatibility. Those limitations and the prior 0.15.4 results remain below.
+
 Baseline: unmodified published Paseo 0.15.4 packages, Node 22.20.0, Linux x86_64. No changes were made to the Paseo repository or the normal daemon.
 
 Release 0.1.4 preflight on 2026-11-15: all 26 unit/compatibility tests and both Chromium browser tests passed on Node 22.20.0. Type checking, linting, formatting and the package dry run also passed. The distributable contains the manifest, runtime entries and modules, overview and declared screenshot.
@@ -18,6 +72,6 @@ Minor review follow-up on 2026-11-15, also with Node 24.22.2: all 28 unit tests 
 
 These are separate forms of evidence. Test adapters validate the transport/lifecycle integration, not a language model's adherence to the coordinator prompt. The real-provider smoke validates model-driven delegation. Neither substitutes for native-device testing. The new attachment path has not been exercised with a real model; worker file use remains model-driven, and the tests verify the supplied context and SDK delivery.
 
-Native iOS/Android, other operating systems and additional real providers have not been exercised. The current manifest deliberately excludes newer Paseo minor versions until their public APIs are checked.
+Native iOS/Android, other operating systems and additional real providers have not been exercised. The manifest now supports the 0.15 and 0.16 series based on the evidence above and excludes 0.17 and newer minor series.
 
 Workspace cleanup's running setup/service guards and hidden-agent pagination have not been exercised separately. Paseo 0.15.4 has no atomic empty-workspace archive operation; creation from another client between the final occupancy check and archival remains a concurrency gap.

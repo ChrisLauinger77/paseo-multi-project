@@ -12,7 +12,7 @@ This is a standalone plugin. It requires no Paseo fork or upstream PR #5014. The
 
 ## Requirements
 
-- Paseo daemon and connected app **0.15.4**. The initial supported range is `>=0.15.4 <0.16.0`; newer minor releases need verification.
+- Requires Paseo daemon and connected app **0.15.x or 0.16.x** (`>=0.15.0 <0.17.0`). Verified with 0.15.4 and 0.16.0.
 - An enabled, available coding-agent provider with Paseo tool delivery enabled. Both MCP and native delivery are exercised by automated compatibility tests.
 - Existing registered projects on one host. Worktree isolation requires all selected projects to be Git repositories.
 
@@ -110,7 +110,7 @@ To refresh dependencies automatically after `git pull`, enable the repository ho
 
 The compatibility and browser tests use the unmodified published `@getpaseo/server@0.15.4`, temporary projects/homes and OS-assigned ports. They never connect to your normal daemon. The typed provider adapter is supplied by the stock package; its fixture imports are confined to tests. Compatibility tests also pack and load the plugin without its development `node_modules`, verifying that the stock host can compile the distributed source.
 
-Paseo package versions are pinned to the tested baseline. When updating them, review `paseo-plugin.json`, the test fixtures/version assertions and [validation evidence](docs/validation.md) together; widen the supported range only after verification. `renovate.json` uses the shared Paseo plugin preset for dependency updates.
+Development packages and the default fixture stay pinned to the proven 0.15.4 baseline. Paseo 0.16.0 was verified in a separate dependency installation with matching packages and bundled web UI; see [validation evidence](docs/validation.md). Support is declared per minor series: patches within 0.15.x and 0.16.x are assumed compatible, without a patch-by-patch test requirement. The 0.15.0 minimum expresses that policy; it does not claim a 0.15.0 test run. `renovate.json` uses the shared Paseo plugin preset for dependency updates.
 
 For an explicit real-provider smoke with your installed Codex and normal credentials:
 
