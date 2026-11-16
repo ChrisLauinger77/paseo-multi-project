@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/github/v/release/ChrisLauinger77/paseo-multi-project)](https://github.com/ChrisLauinger77/paseo-multi-project/releases/latest)
 [![Paseo installs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fpaseo.sh%2Fapi%2Fplugins%2Finstalls%3Fwindow%3Dall&query=%24%5B%22chrislauinger77%2Fmulti-project%22%5D&label=Paseo%20installs&color=green)](https://paseo.sh/plugins/chrislauinger77/multi-project)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-orange)](LICENSE)
-![Static Badge](https://img.shields.io/badge/Linux%20%7C%20MacOS%20%7C%20Windows-blue)
+[![Paseo 0.15–0.16](https://img.shields.io/badge/Paseo-0.15--0.16-blue)](#requirements)
 
 Run one coding task across selected existing Paseo projects. A coordinator creates a Local or managed Worktree workspace for each target, launches one child agent per project in parallel, and consolidates their results after Paseo delivers completion notifications.
 
