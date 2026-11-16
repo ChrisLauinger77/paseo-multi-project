@@ -190,7 +190,7 @@ test("opens coordinators with invalid input and their children", async () => {
 }, 60000);
 
 test.each([false, true])(
-  "stock 0.15.4 plugin orchestration over native=%s",
+  "stock 0.16.0 plugin orchestration over native=%s",
   async (native) => {
     expect(
       JSON.parse(
@@ -199,7 +199,7 @@ test.each([false, true])(
           "utf8",
         ),
       ).version,
-    ).toBe("0.15.4");
+    ).toBe("0.16.0");
     const f = await fixture(native);
     try {
       const coordinator = await f.launch();

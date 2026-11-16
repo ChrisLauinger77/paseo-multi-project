@@ -16,7 +16,7 @@ test("real Codex coordinates two temporary projects on stock Paseo", async () =>
   const root = await mkdtemp(path.join(tmpdir(), "paseo-plugin-real-"));
   const logger = pino({ level: "warn" });
   const daemon = await createTestPaseoDaemon({
-    daemonVersion: "0.15.4",
+    daemonVersion: "0.16.0",
     paseoHomeRoot: path.join(root, "home"),
     agentClients: { codex: new CodexAppServerAgentClient(logger) },
     mcpEnabled: true,
@@ -31,7 +31,7 @@ test("real Codex coordinates two temporary projects on stock Paseo", async () =>
   });
   const driver = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
-    appVersion: "0.15.4",
+    appVersion: "0.16.0",
   });
   let remove = () => {};
   let timer: ReturnType<typeof setTimeout> | undefined;

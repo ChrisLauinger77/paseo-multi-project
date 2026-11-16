@@ -1,4 +1,4 @@
-// Published 0.15.4 test adapters are used only in integration tests, never in plugin runtime code.
+// Published 0.16.0 test adapters are used only in integration tests, never in plugin runtime code.
 import { createTestPaseoDaemon } from "../node_modules/@getpaseo/server/dist/server/server/test-utils/paseo-daemon.js";
 import { createTestAgentClient } from "../node_modules/@getpaseo/server/dist/server/server/test-utils/fake-agent-client.js";
 import type {
@@ -93,7 +93,6 @@ export async function fixture(
     },
     isAvailable: () => inner.isAvailable(),
     fetchCatalog: (options, context) => inner.fetchCatalog(options, context),
-    listFeatures: (config) => inner.listFeatures?.(config) ?? Promise.resolve([]),
   };
   let daemon: Awaited<ReturnType<typeof createTestPaseoDaemon>> | undefined;
   let driver: DaemonClient | undefined;
@@ -102,7 +101,7 @@ export async function fixture(
   process.env.PASEO_MULTI_PROJECT_DATA_DIR = attachmentDirectory;
   try {
     daemon = await createTestPaseoDaemon({
-      daemonVersion: "0.15.4",
+      daemonVersion: "0.16.0",
       paseoHomeRoot: path.join(root, "home"),
       agentClients: { codex: provider },
       mcpEnabled: true,
@@ -121,7 +120,7 @@ export async function fixture(
         },
       },
     });
-    driver = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws`, appVersion: "0.15.4" });
+    driver = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws`, appVersion: "0.16.0" });
     await driver.connect();
     const plugin = (await driver.listPlugins()).find((p) => p.id === "paseo-multi-project");
     if (plugin?.error) throw new Error(plugin.error);
