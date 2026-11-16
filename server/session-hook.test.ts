@@ -20,6 +20,8 @@ function request(labels: Record<string, string>): PluginSessionOpenRequest {
     reason: "resume",
     purpose: "interactive",
     title: null,
+    background: false,
+    metadata: {},
     labels,
     tools: [],
     env: {},

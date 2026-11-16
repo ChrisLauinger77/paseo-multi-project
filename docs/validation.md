@@ -1,5 +1,17 @@
 # Validation
 
+## Default 0.16.0 test baseline — 2026-11-16
+
+The development baseline now uses exact published **0.16.0** versions of `@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol` and `@getpaseo/server`, with the npm-generated lockfile, compatibility/browser fixture, version assertion and opt-in real-provider fixture synchronized. These pins select the isolated test host; they do not constrain the Paseo installation on the user's machine. The supported range remains `>=0.15.0 <0.17.0`, and earlier 0.15.4 results remain support evidence for the 0.15 series.
+
+This is a development follow-up after **v0.1.6**. The published tag is unchanged and retains its documented 0.15.4 release-test baseline. Pin descriptions in the earlier validation sections below refer to the revisions tested at that time.
+
+Clean `npm ci` with CI-pinned Node **22.23.5** / npm **10.9.9** on Linux x86_64 passed, followed by all **51 unit/compatibility tests** (28 unit and 23 compatibility; 70.32 seconds) and all **four real Chromium browser tests** (38.4 seconds), with no skips. Type checking, linting, formatting and the 30-file package dry run passed. The compatibility suite loaded packed source without development dependencies. Installed package inspection confirmed all four Paseo packages are 0.16.0; the server's bundled JavaScript identifies `@getpaseo/app` as 0.16.0.
+
+The fixture adaptations are test-only: remove the obsolete `AgentClient.listFeatures` method and provide the new `background` and `metadata` session-hook request fields. No runtime plugin code, manifest compatibility range or user data flow changed, and no assertions were weakened. The optional real-provider fixture's versions were updated and type checked, but no real-provider smoke was run.
+
+Browser testing used installed **Chromium 156.0.8078.79** through an external config at `/workspace/work/paseo-baseline-0.16/browser.config.ts`, preserving the tracked config and the previously documented download workaround. Command logs are in `/workspace/work/paseo-baseline-0.16/logs/`; six screenshots are in `/workspace/work/paseo-baseline-0.16/repo/artifacts/`. Tests used deterministic providers, isolated loopback daemons and temporary resources under `/workspace/work/paseo-baseline-0.16/tmp`; no installed daemon/app or running agents were changed. Native-device behavior remains untested.
+
 ## Release 0.1.6 preflight — 2026-11-16
 
 A clean `npm ci` with CI-pinned Node **22.23.5** / npm **10.9.9** on Linux x86_64 was followed by all **51 unit/compatibility tests** (28 unit, 23 compatibility; 54.49 seconds) and all **four Chromium browser tests** (34.9 seconds) passing against the unchanged stock Paseo **0.15.4** development baseline. No tests were skipped. Type checking, linting, formatting and `npm pack --dry-run --ignore-scripts` passed. The package contains 30 files, including the manifest, both runtime entries, all imported runtime modules, updated overview and declared screenshot. The compatibility suite loaded the packed source without development dependencies.
