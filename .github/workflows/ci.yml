@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+    paths-ignore:
+      - .github/workflows/claude.yml
 permissions:
   contents: read
 jobs:
