@@ -1,8 +1,11 @@
 name: CI
 on:
   push:
+    paths-ignore:
+      - "**.md"
   pull_request:
     paths-ignore:
+      - "**.md"
       - .github/workflows/claude.yml
 permissions:
   contents: read
