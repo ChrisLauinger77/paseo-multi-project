@@ -1,5 +1,19 @@
 # Validation
 
+## Minimum-only requirement and Paseo 0.17.0-beta.1 check — 2026-11-19
+
+The manifest requirement changed from `>=0.15.0 <0.17.0` to `>=0.15.0`. The plugin no longer caps the Paseo version, so new Paseo releases load without a plugin release; incompatibilities are fixed in plugin releases instead. Most registry plugins use a minimum-only range: a scan of all 226 npm-distributed registry plugins found 203 whose latest version declares only a minimum, while the 21 bounded ones republish to extend their upper bound with each Paseo minor series.
+
+Against the stock `assertPluginCompatibility` from `@getpaseo/protocol@0.17.0-beta.1`, the previous range was rejected ("requires Paseo >=0.15.0 <0.17.0. Your daemon is 0.17.0-beta.1"). The new `>=0.15.0` range is accepted, because the host also checks the prerelease's stable core 0.17.0.
+
+The plugin was tested against unmodified published **0.17.0-beta.1** packages (`@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol`, `@getpaseo/server`, npm `beta` tag) in a separate copy of the repository, with Node **22.23.5** / npm **10.9.9** on Linux x86_64. Only the four package pins, the lockfile, fixture `daemonVersion`/`appVersion` and the package version assertion were changed to 0.17.0-beta.1. The plugin source was unchanged. Results:
+
+- `npm run typecheck` and `npm run lint`: passed.
+- `npm test`: all **51 unit/compatibility tests** passed (93.1 seconds), including the packed-source load and the stock server version assertion for 0.17.0-beta.1.
+- `npm run test:browser`: all **four Chromium browser tests** passed (46.6 seconds) against the bundled 0.17.0-beta.1 web app. An external Playwright config pointed at the sandbox's preinstalled Chrome for Testing 153.0.8010.12, because the pinned Playwright's browser download was absent.
+
+A fresh lockfile-free `npm install` with the beta pins failed inside npm's peer resolution (`Cannot read properties of null (reading 'edgesOut')`, involving vitest). Installing over the existing lockfile succeeded. The default development baseline stays at 0.16.0; no real-provider smoke or native-device test was run. The published v0.1.6 keeps its `<0.17.0` cap until a new plugin release.
+
 ## Default 0.16.0 test baseline — 2026-11-16
 
 The development baseline now uses exact published **0.16.0** versions of `@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol` and `@getpaseo/server`, with the npm-generated lockfile, compatibility/browser fixture, version assertion and opt-in real-provider fixture synchronized. These pins select the isolated test host; they do not constrain the Paseo installation on the user's machine. The supported range remains `>=0.15.0 <0.17.0`, and earlier 0.15.4 results remain support evidence for the 0.15 series.
@@ -94,6 +108,6 @@ Minor review follow-up on 2026-11-15, also with Node 24.22.2: all 28 unit tests 
 
 These are separate forms of evidence. Test adapters validate the transport/lifecycle integration, not a language model's adherence to the coordinator prompt. The real-provider smoke validates model-driven delegation. Neither substitutes for native-device testing. The new attachment path has not been exercised with a real model; worker file use remains model-driven, and the tests verify the supplied context and SDK delivery.
 
-Native iOS/Android, other operating systems and additional real providers have not been exercised. The manifest now supports the 0.15 and 0.16 series based on the evidence above and excludes 0.17 and newer minor series.
+Native iOS/Android, other operating systems and additional real providers have not been exercised. The manifest now supports the 0.15 and 0.16 series based on the evidence above and excludes 0.17 and newer minor series. This range was superseded on 2026-11-19 by the minimum-only `>=0.15.0` requirement described at the top.
 
 Workspace cleanup's running setup/service guards and hidden-agent pagination have not been exercised separately. Paseo 0.15.4 has no atomic empty-workspace archive operation; creation from another client between the final occupancy check and archival remains a concurrency gap.
