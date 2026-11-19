@@ -1,5 +1,11 @@
 # Validation
 
+## Default 0.16.2 test baseline — 2026-11-19
+
+The development baseline moves to exact published **0.16.2** versions of `@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol` and `@getpaseo/server` (Renovate PR #22). The PR's CI failed only on the hardcoded `0.16.0` package version assertion, before the remaining compatibility tests ran. Tests now take `PASEO_VERSION` from the `@getpaseo/server` pin in `package.json`: the fixture's `daemonVersion`/`appVersion`, the opt-in real-provider fixture and the compatibility assertion, which now checks that all four installed Paseo packages equal the pin. Future grouped Paseo updates need no test version edits. The manifest minimum `>=0.15.0` is unchanged. No plugin runtime code changed, and no assertions were weakened.
+
+Clean `npm ci` with CI-pinned Node **22.23.5** / npm **10.9.9** on macOS arm64 installed all four Paseo packages at 0.16.2. The server's bundled JavaScript identifies `@getpaseo/app` as 0.16.2, while its Expo manifest still reports 0.16.1. Type checking, linting and formatting passed. All **51 unit/compatibility tests** passed (104.9 seconds), including the packed-source load. All **four Chromium browser tests** passed (46.5 seconds) with Playwright's Chrome Headless Shell 159.0.8154.6, installed via `npx playwright install chromium` as in CI. No real-provider smoke or native-device test was run.
+
 ## Minimum-only requirement and Paseo 0.17.0-beta.1 check — 2026-11-19
 
 The manifest requirement changed from `>=0.15.0 <0.17.0` to `>=0.15.0`. The plugin no longer caps the Paseo version, so new Paseo releases load without a plugin release; incompatibilities are fixed in plugin releases instead. Most registry plugins use a minimum-only range: a scan of all 226 npm-distributed registry plugins found 203 whose latest version declares only a minimum, while the 21 bounded ones republish to extend their upper bound with each Paseo minor series.
