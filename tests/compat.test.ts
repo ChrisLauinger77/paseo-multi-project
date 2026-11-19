@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { fixture, TASK_LABEL, PLUGIN_LABEL, deferred } from "./fixture";
+import { fixture, TASK_LABEL, PLUGIN_LABEL, PASEO_VERSION, deferred } from "./fixture";
 import {
   DISCOVERY_TOOL,
   ATTACHMENTS_TOOL,
@@ -190,16 +190,18 @@ test("opens coordinators with invalid input and their children", async () => {
 }, 60000);
 
 test.each([false, true])(
-  "stock 0.16.0 plugin orchestration over native=%s",
+  `stock ${PASEO_VERSION} plugin orchestration over native=%s`,
   async (native) => {
-    expect(
-      JSON.parse(
-        readFileSync(
-          new URL("../node_modules/@getpaseo/server/package.json", import.meta.url),
-          "utf8",
-        ),
-      ).version,
-    ).toBe("0.16.0");
+    for (const name of ["client", "plugin", "protocol", "server"]) {
+      expect(
+        JSON.parse(
+          readFileSync(
+            new URL(`../node_modules/@getpaseo/${name}/package.json`, import.meta.url),
+            "utf8",
+          ),
+        ).version,
+      ).toBe(PASEO_VERSION);
+    }
     const f = await fixture(native);
     try {
       const coordinator = await f.launch();

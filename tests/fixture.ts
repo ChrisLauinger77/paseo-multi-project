@@ -1,4 +1,4 @@
-// Published 0.16.0 test adapters are used only in integration tests, never in plugin runtime code.
+// Published Paseo test adapters are used only in integration tests, never in plugin runtime code.
 import { createTestPaseoDaemon } from "../node_modules/@getpaseo/server/dist/server/server/test-utils/paseo-daemon.js";
 import { createTestAgentClient } from "../node_modules/@getpaseo/server/dist/server/server/test-utils/fake-agent-client.js";
 import type {
@@ -11,6 +11,7 @@ import { DaemonClient } from "../node_modules/@getpaseo/server/dist/server/serve
 import { createPaseoApi } from "@getpaseo/client";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { readFileSync } from "node:fs";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,10 @@ import {
   PLUGIN_LABEL,
   type TaskLaunch,
 } from "../shared/contracts";
+// The stock test host version follows the package pin, so dependency updates need no test edits.
+export const PASEO_VERSION: string = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).devDependencies["@getpaseo/server"];
 export function deferred<T = void>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((r) => {
@@ -101,7 +106,7 @@ export async function fixture(
   process.env.PASEO_MULTI_PROJECT_DATA_DIR = attachmentDirectory;
   try {
     daemon = await createTestPaseoDaemon({
-      daemonVersion: "0.16.0",
+      daemonVersion: PASEO_VERSION,
       paseoHomeRoot: path.join(root, "home"),
       agentClients: { codex: provider },
       mcpEnabled: true,
@@ -120,7 +125,10 @@ export async function fixture(
         },
       },
     });
-    driver = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws`, appVersion: "0.16.0" });
+    driver = new DaemonClient({
+      url: `ws://127.0.0.1:${daemon.port}/ws`,
+      appVersion: PASEO_VERSION,
+    });
     await driver.connect();
     const plugin = (await driver.listPlugins()).find((p) => p.id === "paseo-multi-project");
     if (plugin?.error) throw new Error(plugin.error);

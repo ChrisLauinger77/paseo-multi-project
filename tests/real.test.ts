@@ -11,12 +11,13 @@ import { createTestPaseoDaemon } from "../node_modules/@getpaseo/server/dist/ser
 import { CodexAppServerAgentClient } from "../node_modules/@getpaseo/server/dist/server/server/agent/providers/codex-app-server-agent.js";
 import { DaemonClient } from "../node_modules/@getpaseo/server/dist/server/server/test-utils/daemon-client.js";
 import { launchRpc, type TaskLaunch } from "../shared/contracts";
+import { PASEO_VERSION } from "./fixture";
 
 test("real Codex coordinates two temporary projects on stock Paseo", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "paseo-plugin-real-"));
   const logger = pino({ level: "warn" });
   const daemon = await createTestPaseoDaemon({
-    daemonVersion: "0.16.0",
+    daemonVersion: PASEO_VERSION,
     paseoHomeRoot: path.join(root, "home"),
     agentClients: { codex: new CodexAppServerAgentClient(logger) },
     mcpEnabled: true,
@@ -31,7 +32,7 @@ test("real Codex coordinates two temporary projects on stock Paseo", async () =>
   });
   const driver = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
-    appVersion: "0.16.0",
+    appVersion: PASEO_VERSION,
   });
   let remove = () => {};
   let timer: ReturnType<typeof setTimeout> | undefined;
