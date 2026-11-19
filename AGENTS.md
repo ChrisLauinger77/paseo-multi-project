@@ -60,7 +60,7 @@ Distribution uses the public GitHub repository and registry entry `chrislauinger
 
    Inspect the package file list for the manifest, runtime entries, all imported local modules, overview and declared assets. Compatibility tests must confirm the packed source loads without development dependencies.
 
-3. Review the diff and preserve unrelated work. Prepare the release commit, annotated `vX.Y.Z` tag and registry submission draft before requesting any missing publishing approval. Tag the intended release commit, normally on merged `main`, and push that commit and tag once authorized. Never move an existing release tag. Verify the remote tag resolves to the tested commit and release CI succeeds.
+3. Review the diff and preserve unrelated work. Prepare the release commit, annotated `vX.Y.Z` tag and registry submission draft before requesting any missing publishing approval. Commit the release (`chore: release vX.Y.Z`) directly on an up-to-date `main`; do not use a release branch or pull request. Tag that commit and push `main` and the tag once authorized. Never move an existing release tag. Verify the remote tag resolves to the tested commit and release CI succeeds.
 4. Submit each Git update manually to [getpaseo/plugins](https://github.com/getpaseo/plugins/issues/new?template=submit-plugin.yml), identifying the existing entry `chrislauinger77/multi-project` and the new tag. Use the form or, after checking the current [intake parser](https://github.com/getpaseo/plugins/blob/main/scripts/lib/issue.ts), a GitHub API issue with the form's sections:
 
    ```md
