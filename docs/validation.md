@@ -1,5 +1,11 @@
 # Validation
 
+## Release 0.1.7 preflight — 2026-11-19
+
+This release publishes the minimum-only requirement `>=0.15.0` (no upper bound), replacing v0.1.6's `>=0.15.0 <0.17.0`. The manifest, README and distributed overview agree. Since v0.1.6, the only distributed-file changes are the manifest requirement, the overview's compatibility sentence, README text and `package.json` version/development pins; plugin runtime code, data access and attachment storage/retention are unchanged. The development baseline is stock Paseo **0.16.2**. Compatibility claims rest on the evidence below: 0.15.4 for the 0.15 series, 0.16.0 and 0.16.2, and 0.17.0-beta.1.
+
+A clean `npm ci` with CI-pinned Node **22.23.5** / npm **10.9.9** on macOS arm64 at the release revision was followed by passing `format`, `typecheck`, `lint` and `format:check`. All **51 unit/compatibility tests** passed (28 unit, 23 compatibility; 100.9 seconds), and all **four Chromium browser tests** passed (44.3 seconds) with Playwright's Chrome Headless Shell 159.0.8154.6. No tests were skipped. `npm pack --dry-run --ignore-scripts` lists 30 files, including the manifest, both runtime entries, all 23 runtime modules reachable from them, the overview and the declared screenshot; the compatibility suite loaded the packed source without development dependencies. The declared `assets/screenshot.png` was compared with this run's desktop form capture and still shows the current interface with sample data. No real-provider smoke or native-device test was run.
+
 ## Default 0.16.2 test baseline — 2026-11-19
 
 The development baseline moves to exact published **0.16.2** versions of `@getpaseo/client`, `@getpaseo/plugin`, `@getpaseo/protocol` and `@getpaseo/server` (Renovate PR #22). The PR's CI failed only on the hardcoded `0.16.0` package version assertion, before the remaining compatibility tests ran. Tests now take `PASEO_VERSION` from the `@getpaseo/server` pin in `package.json`: the fixture's `daemonVersion`/`appVersion`, the opt-in real-provider fixture and the compatibility assertion, which now checks that all four installed Paseo packages equal the pin. Future grouped Paseo updates need no test version edits. The manifest minimum `>=0.15.0` is unchanged. No plugin runtime code changed, and no assertions were weakened.

@@ -38,7 +38,7 @@ Connected desktop, web and mobile clients receive the client contribution from t
 To install a specific release directly from Git:
 
 ```sh
-paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.6
+paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.7
 ```
 
 The initial `--ref` selects the installed tag; it does not permanently pin all future update checks. Review the proposed revision before applying an update. Use Paseo's plugin update controls rather than replacing managed files.
