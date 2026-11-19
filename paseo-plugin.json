@@ -3,7 +3,7 @@
   "name": "Multi-project tasks",
   "description": "Coordinate coding tasks across existing Paseo projects.",
   "requirements": {
-    "paseo": ">=0.15.0 <0.17.0"
+    "paseo": ">=0.15.0"
   },
   "media": ["assets/screenshot.png"]
 }

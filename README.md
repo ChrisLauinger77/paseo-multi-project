@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/github/v/release/ChrisLauinger77/paseo-multi-project)](https://github.com/ChrisLauinger77/paseo-multi-project/releases/latest)
 [![Paseo installs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fpaseo.sh%2Fapi%2Fplugins%2Finstalls%3Fwindow%3Dall&query=%24%5B%22chrislauinger77%2Fmulti-project%22%5D&label=Paseo%20installs&color=green)](https://paseo.sh/plugins/chrislauinger77/multi-project)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-orange)](LICENSE)
-[![Paseo 0.15–0.16](https://img.shields.io/badge/Paseo-0.15--0.16-blue)](#requirements)
+[![Paseo >=0.15](https://img.shields.io/badge/Paseo-%3E%3D0.15-blue)](#requirements)
 
 Run one coding task across selected existing Paseo projects. A coordinator creates a Local or managed Worktree workspace for each target, launches one child agent per project in parallel, and consolidates their results after Paseo delivers completion notifications.
 
@@ -12,7 +12,7 @@ This is a standalone plugin. It requires no Paseo fork or upstream PR #5014. The
 
 ## Requirements
 
-- Requires Paseo daemon and connected app **0.15.x or 0.16.x** (`>=0.15.0 <0.17.0`). Verified with 0.15.4 and 0.16.0.
+- Requires Paseo daemon and connected app **0.15 or newer** (`>=0.15.0`). Tested with 0.15.x, 0.16.x and 0.17.0-beta.1. Newer Paseo releases are accepted without a plugin update; please report incompatibilities.
 - An enabled, available coding-agent provider with Paseo tool delivery enabled. Both MCP and native delivery are exercised by automated compatibility tests.
 - Existing registered projects on one host. Worktree isolation requires all selected projects to be Git repositories.
 
@@ -110,7 +110,7 @@ To refresh dependencies automatically after `git pull`, enable the repository ho
 
 The compatibility and browser tests use the unmodified published `@getpaseo/server@0.16.0`, temporary projects/homes and OS-assigned ports. They never connect to your normal daemon. The typed provider adapter is supplied by the stock package; its fixture imports are confined to tests. Compatibility tests also pack and load the plugin without its development `node_modules`, verifying that the stock host can compile the distributed source.
 
-Development packages, fixtures and version assertions are pinned together to **0.16.0**, the default regression-test baseline. These pins control the isolated test host, not the Paseo installation on your machine or the minimum supported version. When adopting a new baseline, update all four Paseo packages, the lockfile, fixtures and assertions together and record the [validation evidence](docs/validation.md). Earlier 0.15.4 validation remains evidence for support of the 0.15 series. Support is declared per minor series: patches within 0.15.x and 0.16.x are assumed compatible, without a patch-by-patch test requirement. The 0.15.0 minimum expresses that policy; it does not claim a 0.15.0 test run. `renovate.json` uses the shared Paseo plugin preset for dependency updates.
+Development packages, fixtures and version assertions are pinned together to **0.16.0**, the default regression-test baseline. These pins control the isolated test host, not the Paseo installation on your machine or the minimum supported version. When adopting a new baseline, update all four Paseo packages, the lockfile, fixtures and assertions together and record the [validation evidence](docs/validation.md). The manifest declares only a minimum Paseo version, without an upper bound, so new Paseo releases do not require a plugin release. New Paseo minor and beta releases are checked by running the suites against them, and incompatibilities are fixed in a plugin release instead of capping the range. The minimum is raised only when the plugin needs an API or behavior that older Paseo releases lack. The 0.15.0 minimum covers the 0.15 series, validated with 0.15.4; it does not claim a 0.15.0 test run. `renovate.json` uses the shared Paseo plugin preset for dependency updates.
 
 For an explicit real-provider smoke with your installed Codex and normal credentials:
 

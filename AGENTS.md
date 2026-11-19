@@ -1,6 +1,6 @@
 # Development
 
-Standalone Paseo plugin. Runtime code uses only public plugin/SDK APIs supported by the manifest range. Client code lives in client/, server code in server/, and shared contracts/plain logic in shared/. Runtime entry files register contributions only.
+Standalone Paseo plugin. Runtime code uses only public plugin/SDK APIs available since the manifest's minimum Paseo version. Client code lives in client/, server code in server/, and shared contracts/plain logic in shared/. Runtime entry files register contributions only.
 
 Read [docs/architecture.md](docs/architecture.md) for the execution flow and [docs/validation.md](docs/validation.md) for tested behavior and remaining gaps. [README.md](README.md) owns installation, user workflow and data retention guidance.
 
@@ -24,15 +24,21 @@ Optional workspace cleanup must stay off by default and use public workspace API
 
 Attachment bytes stay in the plugin-owned store, outside repositories and coordinator labels. Preserve integrity validation before creation, task-scoped tool delivery on session open/resume, and the documented retention policy. Tests must use a temporary attachment directory.
 
-Paseo packages are pinned development dependencies; the stock host compiles and loads the distributed source without the plugin's development `node_modules`. Keep stock-package internal imports confined to `tests/`. When changing the Paseo baseline, check the manifest range, dependency pins, test version assertions/configuration and documentation together before claiming support.
+Paseo packages are pinned development dependencies; the stock host compiles and loads the distributed source without the plugin's development `node_modules`. Keep stock-package internal imports confined to `tests/`. When changing the Paseo baseline, check the manifest minimum, dependency pins, test version assertions/configuration and documentation together.
 
-The README's Paseo badge tracks support across all plugin releases. Keep its lower bound fixed at **0.15**. Only extend the upper bound when support for a newer Paseo minor series is established. Older support remains represented even if future plugin releases raise their minimum requirement.
+The manifest's `requirements.paseo` declares only a minimum (`>=X.Y.0`, at the start of a minor series); never add an upper bound. Raise the minimum only when the plugin starts relying on an API or behavior that older Paseo releases lack, and verify the new minimum series. When a new Paseo minor or beta release appears, run typecheck, lint, compatibility and browser tests against it in a separate installation and record the result in `docs/validation.md`; fix incompatibilities in a plugin release instead of capping the range. README and overview list tested versions separately from the minimum.
+
+The README's Paseo badge shows only the manifest's current minimum (**>=0.15**). Update the badge together with the manifest whenever the minimum is raised.
 
 ## Checks
 
 Run npm run typecheck and npm run lint after changes, focused tests for changed behavior, and npm run format before commits. Use npm scripts for formatting/linting. Keep stock daemon integration tests sequential. Browser tests must use a real isolated daemon and browser. Do not install or enable the plugin on a user's normal daemon without permission.
 
 CI uses the Node 22 version pinned in `.github/workflows/ci.yml` (see README.md). `npm test` runs unit and compatibility tests; browser tests run separately with `npm run test:browser`. Use `npm run test:compat` for RPC, tool, lifecycle or packaging changes and `npm run test:browser` for UI changes. `npm run test:real` is an explicit opt-in smoke that uses normal Codex credentials and paid provider usage; it is excluded from the default suite and CI.
+
+## Commits and pull requests
+
+Do not add `Co-Authored-By` trailers, session links, "Generated with Claude Code" footers or any other Claude/AI attribution to commit messages, pull request titles or descriptions, or GitHub comments.
 
 ## Releases
 
