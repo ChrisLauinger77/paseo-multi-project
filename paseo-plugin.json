@@ -2,6 +2,7 @@
   "id": "paseo-multi-project",
   "name": "Multi-project tasks",
   "description": "Coordinate coding tasks across existing Paseo projects.",
+  "icon": "assets/icon.png",
   "requirements": {
     "paseo": ">=0.15.0"
   },
