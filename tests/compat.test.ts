@@ -325,7 +325,7 @@ async function deadline<T>(promise: Promise<T>, label: string): Promise<T> {
 }
 
 test("a clean distributable loads without the plugin's development node_modules", async () => {
-  const { mkdtemp, rm, access } = await import("node:fs/promises");
+  const { mkdtemp, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const { execFileSync } = await import("node:child_process");
@@ -344,6 +344,18 @@ test("a clean distributable loads without the plugin's development node_modules"
     await expect(access(join(directory, "node_modules"))).rejects.toThrow();
     const f = await fixture(false, directory);
     try {
+      const iconPath = "assets/icon.png";
+      const plugins = await f.driver.listPlugins();
+      expect(plugins.find((plugin) => plugin.id === "paseo-multi-project")).toMatchObject({
+        icon: iconPath,
+        status: "running",
+      });
+      const icon = await readFile(join(directory, iconPath));
+      expect(icon.subarray(0, 8)).toEqual(Buffer.from("89504e470d0a1a0a", "hex"));
+      expect(icon.subarray(12, 16).toString("ascii")).toBe("IHDR");
+      expect([icon.readUInt32BE(16), icon.readUInt32BE(20)]).toEqual([256, 256]);
+      expect(icon.length).toBeLessThan(256 * 1024);
+
       const catalog = await f.rpc("catalog.read", {});
       expect(catalog).toMatchObject({
         projects: f.projects,
