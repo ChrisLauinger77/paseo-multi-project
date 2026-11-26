@@ -10,7 +10,6 @@ import {
   catalogOptionError,
   initialAgentConfig,
   sameAgentConfig,
-  unavailableFeatureOptions,
   useAgentFeatures,
 } from "./agent-config";
 import { createTaskForm } from "./form";
@@ -51,11 +50,8 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
     : null;
   const cwd = state.projects[0]?.projectRootPath ?? null;
   const featureConfig = catalog.isSuccess && !catalogIssue ? state.config : null;
-  const features = useAgentFeatures(featureConfig, cwd);
-  const unavailable = unavailableFeatureOptions(
-    state.config,
-    features.isSuccess && !features.isPlaceholderData ? features.data.features : undefined,
-  );
+  const features = useAgentFeatures(featureConfig, cwd, form.setConfig);
+  const unavailable = features.unavailable;
   const standardConfig =
     selectedProvider?.status === "ready"
       ? initialAgentConfig(selectedProvider.id, selectedProvider)
@@ -272,6 +268,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         theme={theme}
         selectProvider={selectProvider}
         setConfig={form.setConfig}
+        setFeatureValue={features.setFeatureValue}
         setIsolation={form.setIsolation}
       />
       {defaults.status === "error" || defaults.status === "invalid" ? (

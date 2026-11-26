@@ -100,10 +100,12 @@ export function AgentOptions({
   theme,
   disabled,
   setConfig,
+  setFeatureValue,
   testID,
 }: AgentFieldsProps & {
   features: TaskFeatures["features"];
   compact: boolean;
+  setFeatureValue(id: string, value: boolean | string | null): void;
   testID?: string;
 }) {
   const field = agentFieldStyle(compact);
@@ -150,8 +152,7 @@ export function AgentOptions({
       ) : null}
       {features.map((feature) => {
         const saved = config.featureValues?.[feature.id];
-        const setValue = (value: boolean | string | null) =>
-          setConfig({ ...config, featureValues: { ...config.featureValues, [feature.id]: value } });
+        const setValue = (value: boolean | string | null) => setFeatureValue(feature.id, value);
         return (
           <View key={feature.id} style={field}>
             {feature.type === "toggle" ? (

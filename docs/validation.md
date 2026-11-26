@@ -4,7 +4,7 @@
 
 On macOS arm64 with CI-pinned Node 22.23.5 and npm 10.9.9, typecheck, lint and formatting passed against the branch's stock Paseo 0.17.5 pin. All 28 unit tests, 23 compatibility tests and seven Chromium browser tests passed. The package dry run listed 36 files. The compatibility suite loaded the packed source without development dependencies. An earlier run against Paseo 0.17.3 covered the initial defaults implementation.
 
-The three focused provider-defaults browser tests also passed in a separate stock Paseo 0.15.0 installation. Its typecheck and lint passed after removing two newer session-hook fields from an existing test fixture in that copy. Browser coverage includes desktop and compact settings, project-only and dependent options, catalog failure recovery, retrying a conflicted save, task-only overrides, and unchanged launch retries after saved settings change.
+The three focused provider-defaults browser tests also passed in a separate stock Paseo 0.15.0 installation. Its typecheck and lint passed after removing two newer session-hook fields from an existing test fixture in that copy. Browser coverage includes desktop and compact settings, project-only options, clearing hidden child values, selective recovery when a provider rejects stale values, catalog failure recovery, conflicted saves and removals, task-only overrides, and unchanged launch retries after saved settings change.
 
 ## Release 0.1.7 preflight — 2026-11-19
 

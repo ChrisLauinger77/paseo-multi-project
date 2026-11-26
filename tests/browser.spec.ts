@@ -69,13 +69,20 @@ for (const compact of [false, true]) {
       const settingsReads = new Set<string>();
       let browserRevision: string | undefined;
       let lostReply: string | undefined;
+      let beforeRemoval: (() => Promise<unknown>) | undefined;
       await page.routeWebSocket(/\/ws(?:\?|$)/, (route) => {
         const server = route.connectToServer();
-        route.onMessage((data) => {
+        route.onMessage(async (data) => {
           if (data.toString().startsWith("{")) {
             const message = findRpc(JSON.parse(data.toString()));
             if (message?.type === "plugin.rpc.invoke.request") {
               if (message.method === settings.read.name) settingsReads.add(message.requestId);
+              if (message.method === settings.write.name && beforeRemoval) {
+                const update = beforeRemoval;
+                beforeRemoval = undefined;
+                // Let a second client save after the removal has captured its revision.
+                await update();
+              }
               if (message.method === "tasks.launch") {
                 launchRequests.push(launchSchema.parse(message.input));
                 if (launchRequests.length === 1) lostReply = message.requestId;
@@ -245,9 +252,21 @@ for (const compact of [false, true]) {
 
       await page.goto(settingsUrl);
       await provider.selectOption("codex");
+      const beforeConflict = (await readDefaults()).providers;
+      const newerDefaults = {
+        codex: { ...beforeConflict.codex!, modeId: "always-ask" },
+        claude: { model: "sonnet" },
+      };
+      beforeRemoval = () => writeDefaults(newerDefaults);
+      await remove.click();
+      await expect(page.getByRole("alert")).toContainText(/changed|conflict/i);
+      expect((await readDefaults()).providers).toEqual(newerDefaults);
+      await page.getByRole("button", { name: "Reload saved values" }).click();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(mode).toHaveValue("always-ask");
       await remove.click();
       await expect(remove).toHaveCount(0);
-      expect((await readDefaults()).providers).toEqual({ claude: updated.claude });
+      expect((await readDefaults()).providers).toEqual({ claude: newerDefaults.claude });
       await page.goto(taskUrl);
       await provider.selectOption("codex");
       await expect(model).toHaveValue("gpt-5.4-mini");
@@ -339,8 +358,37 @@ test("stock browser uses project context and chosen values for provider options"
     await projectOption.click();
     await expect(dependentOption).toBeVisible();
     await dependentOption.click();
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const save = page.getByRole("button", { name: "Save", exact: true });
+    await expect(save).toBeEnabled();
+    await projectOption.click();
+    await expect(dependentOption).toHaveCount(0);
+    await expect(save).toBeEnabled();
+    await projectOption.click();
+    await expect(dependentOption).not.toBeChecked();
+    await dependentOption.click();
+    await save.click();
     await expect(page.getByRole("button", { name: "Remove saved default" })).toBeVisible();
+
+    const settings = settingsRpc(agentDefaults.id);
+    const stored = settings.read.output.parse(await f.rpc(settings.read.name, {}));
+    if (stored.status !== "ready") throw new Error(stored.error);
+    const { providers } = agentDefaults.schema.parse(stored.values);
+    const invalid = {
+      codex: {
+        ...providers.codex!,
+        featureValues: {
+          ...providers.codex!.featureValues,
+          obsolete_feature: true,
+          optional_feature: "old-choice",
+        },
+      },
+    };
+    expect(
+      await f.rpc(settings.write.name, {
+        revision: stored.revision,
+        values: { providers: invalid },
+      }),
+    ).toMatchObject({ status: "saved" });
 
     await page.goto(`${origin}/h/${serverId}/plugin/paseo-multi-project/surface/tasks`);
     await page.getByTestId("multi-project-prompt").fill("Use project-specific defaults");
@@ -350,6 +398,24 @@ test("stock browser uses project context and chosen values for provider options"
     await expect(projectOption).toBeChecked();
     await expect(dependentOption).toBeChecked();
     const launch = page.getByTestId("multi-project-launch");
+    const alert = page.getByRole("alert");
+    await expect(alert).toContainText('Agent option "obsolete_feature" is unavailable.');
+    await expect(alert).toContainText('Value "old-choice" for "Optional option" is unavailable.');
+    expect(f.rejectedOptions).toEqual(
+      expect.arrayContaining(["obsolete_feature", "optional_feature"]),
+    );
+    await expect(launch).toBeDisabled();
+    await page.getByRole("button", { name: "Remove unavailable options" }).click();
+    await expect(commonOption).toBeChecked();
+    await expect(dependentOption).toBeChecked();
+    await expect(launch).toBeEnabled();
+
+    await projectOption.click();
+    await expect(dependentOption).toHaveCount(0);
+    await expect(launch).toBeEnabled();
+    await projectOption.click();
+    await expect(dependentOption).not.toBeChecked();
+    await dependentOption.click();
     await expect(launch).toBeEnabled();
 
     failCatalog = true;
@@ -369,13 +435,10 @@ test("stock browser uses project context and chosen values for provider options"
     await page.getByRole("button", { name: "Remove unavailable options" }).click();
     await expect(commonOption).toBeChecked();
     await expect(launch).toBeEnabled();
-    const { read } = settingsRpc(agentDefaults.id);
-    expect(await f.rpc(read.name, {})).toMatchObject({
+    expect(await f.rpc(settings.read.name, {})).toMatchObject({
       values: {
         providers: {
-          codex: {
-            featureValues: { test_feature: true, project_feature: true, dependent_feature: true },
-          },
+          codex: invalid.codex,
         },
       },
     });

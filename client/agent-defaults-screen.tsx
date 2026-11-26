@@ -7,12 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { agentDefaults } from "../shared/agent-defaults";
 import { catalogProviders } from "../shared/catalog";
 import type { TaskAgentConfig } from "../shared/contracts";
-import {
-  catalogOptionError,
-  initialAgentConfig,
-  unavailableFeatureOptions,
-  useAgentFeatures,
-} from "./agent-config";
+import { catalogOptionError, initialAgentConfig, useAgentFeatures } from "./agent-config";
 import { AgentModelSelect, AgentOptions, AgentProviderSelect } from "./agent-options";
 import { CompactSelect } from "./compact-select";
 
@@ -50,11 +45,12 @@ export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
   const projectMissing = Boolean(projectId && projects.isSuccess && !project);
   const cwd = projectId ? (project?.projectRootPath ?? null) : undefined;
   const catalogIssue = catalog.isSuccess ? catalogOptionError(config, provider) : null;
-  const features = useAgentFeatures(catalog.isSuccess && !catalogIssue ? config : null, cwd);
-  const unavailable = unavailableFeatureOptions(
-    config,
-    features.isSuccess && !features.isPlaceholderData ? features.data.features : undefined,
+  const features = useAgentFeatures(
+    catalog.isSuccess && !catalogIssue ? config : null,
+    cwd,
+    updateConfig,
   );
+  const unavailable = features.unavailable;
   const optionIssue = catalogIssue ?? unavailable?.message;
   const errorStyle = { color: theme.colors.statusDanger };
   const saving = settings.saving || retryingSave;
@@ -198,6 +194,7 @@ export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
               theme={theme}
               disabled={saving}
               setConfig={updateConfig}
+              setFeatureValue={features.setFeatureValue}
             />
             {optionIssue ? (
               <>
@@ -254,7 +251,17 @@ export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
                     disabled={!canSave}
                     onPress={() => void save("retry")}
                   />
-                ) : null}
+                ) : (
+                  <SettingsAction
+                    label="Saved configuration"
+                    actionLabel="Reload saved values"
+                    disabled={saving}
+                    onPress={() => {
+                      setRetryError(null);
+                      void settings.reload();
+                    }}
+                  />
+                )}
               </>
             ) : null}
             <SettingsAction

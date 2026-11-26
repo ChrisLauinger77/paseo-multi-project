@@ -23,6 +23,7 @@ export function TaskSettings({
   theme,
   selectProvider,
   setConfig,
+  setFeatureValue,
   setIsolation,
 }: {
   config: TaskAgentConfig | null;
@@ -36,6 +37,7 @@ export function TaskSettings({
   theme: PluginScreenProps["theme"];
   selectProvider(id: string): void;
   setConfig(config: TaskAgentConfig): void;
+  setFeatureValue(id: string, value: boolean | string | null): void;
   setIsolation(value: "local" | "worktree"): void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -125,6 +127,7 @@ export function TaskSettings({
               theme={theme}
               disabled={pending}
               setConfig={setConfig}
+              setFeatureValue={setFeatureValue}
               testID="multi-project-agent-options"
             />
           ) : null}

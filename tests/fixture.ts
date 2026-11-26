@@ -48,6 +48,7 @@ export async function fixture(
   const bothDelivered = deferred();
   const launches: Array<{ config: AgentSessionConfig; context?: AgentLaunchContext }> = [];
   const notifications: string[] = [];
+  const rejectedOptions: string[] = [];
   const firstPrompt = deferred<AgentPromptInput>();
   const sessionFailures = { remaining: 0 };
   const attachmentDirectory = path.join(root, "plugin-attachments");
@@ -88,12 +89,22 @@ export async function fixture(
       ...Reflect.get(config, "featureValues"),
       ...config.providerOptions,
     };
-    const features = [{ type: "toggle" as const, id: "test_feature", label: "Test feature" }];
+    const features = [
+      { type: "toggle" as const, id: "test_feature", label: "Test feature" },
+      { type: "toggle" as const, id: "optional_feature", label: "Optional option" },
+    ];
     if (path.basename(config.cwd) === "alpha") {
       features.push({ type: "toggle", id: "project_feature", label: "Project option" });
       if (values.project_feature === true) {
         features.push({ type: "toggle", id: "dependent_feature", label: "Dependent option" });
       }
+    }
+    const rejected = Object.keys(values).filter(
+      (id) => typeof values[id] !== "boolean" || !features.some((feature) => feature.id === id),
+    );
+    if (rejected.length) {
+      rejectedOptions.push(...rejected);
+      throw new Error("Test provider rejected draft options");
     }
     return features.map((feature) => ({ ...feature, value: values[feature.id] === true }));
   }
@@ -257,6 +268,7 @@ export async function fixture(
       rpc,
       tools,
       launches,
+      rejectedOptions,
       notifications,
       workers,
       coordinator,
