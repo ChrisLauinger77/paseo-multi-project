@@ -232,7 +232,8 @@ for (const compact of [false, true]) {
       // Isolation can be chosen while the form is still empty.
       await page.getByRole("combobox", { name: "Isolation", exact: true }).selectOption("worktree");
       await expect(page.getByRole("dialog")).toHaveCount(0);
-      await page.getByTestId("multi-project-prompt").fill("Coordinate the test repositories");
+      const prompt = page.getByTestId("multi-project-prompt");
+      await prompt.fill("Coordinate the test repositories");
       const requirements = {
         name: "requirements.md",
         mimeType: "text/markdown",
@@ -290,11 +291,30 @@ for (const compact of [false, true]) {
         await search.fill(project.projectDisplayName);
         await page.getByTestId(`multi-project-target-${project.projectId}`).click();
       }
-      await search.fill("");
-      await expect(page.getByTestId("multi-project-selection-count")).toContainText("2 selected");
-      await page.getByTestId("multi-project-selected-only").click();
-      await expect(page.getByTestId("multi-project-projects").getByRole("checkbox")).toHaveCount(2);
-      await page.getByTestId("multi-project-selected-only").click();
+      const selectionCount = page.getByTestId("multi-project-selection-count");
+      const selectedOnly = page.getByTestId("multi-project-selected-only");
+      const projectList = page.getByTestId("multi-project-projects");
+      const clearSearch = page.getByRole("button", { name: "Clear search", exact: true });
+      await clearSearch.click();
+      await expect(search).toHaveValue("");
+      await expect(selectionCount).toContainText("2 selected");
+      await selectedOnly.click();
+      await expect(projectList.getByRole("checkbox")).toHaveCount(2);
+
+      const firstProject = f.request.projects[0];
+      await search.fill(firstProject.projectDisplayName);
+      await page.getByRole("button", { name: "Clear selection", exact: true }).click();
+      await expect(selectionCount).toContainText("0 selected");
+      await expect(selectedOnly).not.toBeChecked();
+      await expect(search).toHaveValue(firstProject.projectDisplayName);
+      await expect(
+        page.getByTestId(`multi-project-target-${firstProject.projectId}`),
+      ).not.toBeChecked();
+
+      await clearSearch.click();
+      for (const project of f.request.projects) {
+        await page.getByTestId(`multi-project-target-${project.projectId}`).click();
+      }
       await expect(page.getByRole("combobox", { name: "Isolation", exact: true })).toHaveValue(
         "worktree",
       );
@@ -322,7 +342,17 @@ for (const compact of [false, true]) {
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await page.getByTestId("multi-project-options-toggle").click();
       await expect(page.getByTestId("multi-project-options-summary")).toContainText("Auto");
-      await expect(page.getByTestId("multi-project-launch")).toBeEnabled();
+      const launch = page.getByTestId("multi-project-launch");
+      await expect(launch).toBeEnabled();
+      await page.getByRole("button", { name: "Clear description", exact: true }).click();
+      await expect(prompt).toHaveValue("");
+      await expect(selectionCount).toContainText("2 selected");
+      await expect(
+        page.getByRole("button", { name: "Remove attachment reference.png", exact: true }),
+      ).toBeVisible();
+      await expect(launch).toBeDisabled();
+      await prompt.fill("Coordinate the test repositories");
+      await expect(launch).toBeEnabled();
       await page.getByLabel("Attach files", { exact: true }).setInputFiles({
         name: "too-large.txt",
         mimeType: "text/plain",

@@ -63,6 +63,9 @@ export function createTaskForm() {
     setIsolation(isolation: "local" | "worktree") {
       edit({ isolation });
     },
+    clearProjects() {
+      edit({ projects: [] });
+    },
     toggleProject(project: TaskProject) {
       edit({
         projects: state.projects.some((p) => p.projectId === project.projectId)
