@@ -22,6 +22,7 @@ export const agentConfigSchema = z.object({
   featureValues: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])).optional(),
 });
 export type TaskAgentConfig = z.infer<typeof agentConfigSchema>;
+export const agentOptionsSchema = agentConfigSchema.pick({ modeId: true, thinkingOptionId: true });
 
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 export const MAX_ATTACHMENTS = 8;
@@ -108,6 +109,7 @@ export const catalogRpc = defineRpc({
         error: z.string().optional(),
         modes: z.array(optionSchema),
         models: z.array(optionSchema.extend({ thinkingOptions: z.array(optionSchema) })),
+        lastUsedOptions: agentOptionsSchema.optional(),
       }),
     ),
   }),

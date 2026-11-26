@@ -339,6 +339,7 @@ for (const compact of [false, true]) {
       await page.getByTestId("multi-project-options-toggle").click();
       await expect(page.getByTestId("multi-project-agent-options")).toBeVisible();
       await page.getByRole("combobox", { name: "Mode", exact: true }).selectOption("auto");
+      await page.getByRole("combobox", { name: "Thinking", exact: true }).selectOption("high");
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await page.getByTestId("multi-project-options-toggle").click();
       await expect(page.getByTestId("multi-project-options-summary")).toContainText("Auto");
@@ -394,6 +395,7 @@ for (const compact of [false, true]) {
       expect(agents).toHaveLength(1);
       const coordinator = agents[0]!.agent;
       expect(coordinator.currentModeId).toBe("auto");
+      expect(coordinator.thinkingOptionId).toBe("high");
       expect(
         JSON.parse(coordinator.labels[INPUT_LABEL]!).attachments.map(
           (file: { fileName: string }) => file.fileName,
@@ -475,6 +477,20 @@ for (const compact of [false, true]) {
         if (compact) expect(workspace).not.toBeNull();
         else expect(workspace).toBeNull();
       }
+      await page.reload();
+      const provider = page.getByRole("combobox", { name: "Provider", exact: true });
+      const agentOptions = page.getByTestId("multi-project-options-summary");
+      await provider.selectOption("codex");
+      await expect(agentOptions).toHaveText("Auto · High");
+      await provider.selectOption("claude");
+      await expect(agentOptions).toHaveText("Default mode · Default thinking");
+      await provider.selectOption("codex");
+      await expect(agentOptions).toHaveText("Auto · High");
+      await page.getByTestId("multi-project-options-toggle").click();
+      await expect(page.getByRole("combobox", { name: "Mode", exact: true })).toHaveValue("auto");
+      await expect(page.getByRole("combobox", { name: "Thinking", exact: true })).toHaveValue(
+        "high",
+      );
     } finally {
       await f.close();
     }

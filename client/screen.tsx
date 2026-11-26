@@ -162,6 +162,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   async function submit() {
     const result = await form.submit({ prepare: () => prepare({}), launch });
     if (result) {
+      void queryClient.invalidateQueries({ queryKey: ["catalog"] });
       void tasks.refetch();
       navigation?.openAgent({ agentId: result.agentId });
     }

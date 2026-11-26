@@ -5,6 +5,23 @@ import { SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import { CompactSelect } from "./compact-select";
 import type { TaskAgentConfig, TaskCatalog, TaskFeatures } from "../shared/contracts";
 
+type Provider = TaskCatalog["providers"][number];
+
+function configForModel(
+  provider: Provider,
+  model: Provider["models"][number],
+  options: Provider["lastUsedOptions"],
+): TaskAgentConfig {
+  return {
+    provider: provider.id,
+    model: model.id,
+    modeId: provider.modes.find((mode) => mode.id === options?.modeId)?.id,
+    thinkingOptionId: model.thinkingOptions.find(
+      (option) => option.id === options?.thinkingOptionId,
+    )?.id,
+  };
+}
+
 export function TaskSettings({
   config,
   isolation,
@@ -83,7 +100,12 @@ export function TaskSettings({
             disabled={pending}
             onValueChange={(id) => {
               const current = providers.find((p) => p.id === id);
-              setConfig(current?.models[0] ? { provider: id, model: current.models[0].id } : null);
+              const firstModel = current?.models[0];
+              setConfig(
+                current && firstModel
+                  ? configForModel(current, firstModel, current.lastUsedOptions)
+                  : null,
+              );
             }}
           />
         </View>
@@ -95,7 +117,10 @@ export function TaskSettings({
               value={config.model}
               options={provider.models.map((m) => ({ value: m.id, label: m.label }))}
               disabled={pending}
-              onValueChange={(model) => setConfig({ provider: config.provider, model })}
+              onValueChange={(id) => {
+                const nextModel = provider.models.find((model) => model.id === id);
+                if (nextModel) setConfig(configForModel(provider, nextModel, config));
+              }}
             />
           </View>
         ) : null}

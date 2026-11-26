@@ -108,7 +108,7 @@ export async function fixture(
     daemon = await createTestPaseoDaemon({
       daemonVersion: PASEO_VERSION,
       paseoHomeRoot: path.join(root, "home"),
-      agentClients: { codex: provider },
+      agentClients: { codex: provider, claude: createTestAgentClient("claude") },
       mcpEnabled: true,
       webUi: {
         enabled: true,

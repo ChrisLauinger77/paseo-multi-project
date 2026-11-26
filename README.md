@@ -51,6 +51,8 @@ The initial `--ref` selects the installed tag; it does not permanently pin all f
 4. Select **Start task**. The normal coordinator chat opens.
 5. Return to the plugin screen for the task list, worker status and links to their chats.
 
+Selecting a provider restores Mode and Thinking from the last task launched with that provider on this host, including archived tasks. An option that is unavailable for the current provider or model falls back to its default.
+
 Use **Attach files** on desktop/web, or drop/paste files into the form. **Add host file** copies a file by its absolute path on the daemon host and is available on every platform. Paseo 0.15.4 exposes no native file picker to plugins, so iOS/Android use host-file import. Each task accepts up to 8 files, 5 MiB per file and 20 MiB total. Uploads and unresolved attachment errors block Start task; remove a file or dismiss an error to continue without it.
 
 The coordinator receives every attachment, with PNG/JPEG/GIF/WebP also sent as image input. Each project worker also receives a task-scoped `multi_project_task_attachments` lookup tool automatically. Its instructions include the same file names, types and absolute host paths, and tell it to read/view those files. Workers use their provider's normal file/image tools and permissions. File contents are reference data. They do not replace the fixed orchestration instructions.
