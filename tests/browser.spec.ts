@@ -331,9 +331,9 @@ for (const compact of [false, true]) {
       await page.getByTestId(`multi-project-target-${notes.projectId}`).click();
       await search.fill("");
       await page.getByRole("combobox", { name: "Provider", exact: true }).selectOption("codex");
-      await expect(page.getByRole("combobox", { name: "Model", exact: true })).toHaveValue(
-        "gpt-5.4-mini",
-      );
+      const model = page.getByRole("combobox", { name: "Model", exact: true });
+      await expect(model).toHaveValue("gpt-5.4-mini");
+      await model.selectOption("gpt-5.4");
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(page.getByTestId("multi-project-agent-options")).toHaveCount(0);
       await page.getByTestId("multi-project-options-toggle").click();
@@ -481,16 +481,20 @@ for (const compact of [false, true]) {
       const provider = page.getByRole("combobox", { name: "Provider", exact: true });
       const agentOptions = page.getByTestId("multi-project-options-summary");
       await provider.selectOption("codex");
+      await expect(model).toHaveValue("gpt-5.4");
       await expect(agentOptions).toHaveText("Auto · High");
       await provider.selectOption("claude");
       await expect(agentOptions).toHaveText("Default mode · Default thinking");
       await provider.selectOption("codex");
+      await expect(model).toHaveValue("gpt-5.4");
       await expect(agentOptions).toHaveText("Auto · High");
       await page.getByTestId("multi-project-options-toggle").click();
       await expect(page.getByRole("combobox", { name: "Mode", exact: true })).toHaveValue("auto");
       await expect(page.getByRole("combobox", { name: "Thinking", exact: true })).toHaveValue(
         "high",
       );
+      await model.selectOption("gpt-5.4-mini");
+      await expect(agentOptions).toHaveText("Auto · Default thinking");
     } finally {
       await f.close();
     }

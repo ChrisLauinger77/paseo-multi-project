@@ -12,7 +12,7 @@ This is a standalone plugin. It requires no Paseo fork or upstream PR #5014. The
 
 ## Requirements
 
-- Requires Paseo daemon and connected app **0.15 or newer** (`>=0.15.0`). Tested with 0.15.x, 0.16.x and 0.17.0-beta.1. Newer Paseo releases are accepted without a plugin update; please report incompatibilities.
+- Requires Paseo daemon and connected app **0.15 or newer** (`>=0.15.0`). Tested with 0.15.x, 0.16.x, 0.17.0-beta.1 and 0.17.3. Newer Paseo releases are accepted without a plugin update; please report incompatibilities.
 - An enabled, available coding-agent provider with Paseo tool delivery enabled. Both MCP and native delivery are exercised by automated compatibility tests.
 - Existing registered projects on one host. Worktree isolation requires all selected projects to be Git repositories.
 
@@ -51,7 +51,7 @@ The initial `--ref` selects the installed tag; it does not permanently pin all f
 4. Select **Start task**. The normal coordinator chat opens.
 5. Return to the plugin screen for the task list, worker status and links to their chats.
 
-Selecting a provider restores Mode and Thinking from the last task launched with that provider on this host, including archived tasks. An option that is unavailable for the current provider or model falls back to its default.
+Selecting a provider restores the model, Mode and Thinking from the last task launched with that provider on this host, including archived tasks. If the saved model is unavailable, the form selects the first available model. Changing models starts with the selected model’s default Thinking. Unavailable options fall back to their defaults.
 
 Use **Attach files** on desktop/web, or drop/paste files into the form. **Add host file** copies a file by its absolute path on the daemon host and is available on every platform. Paseo 0.15.4 exposes no native file picker to plugins, so iOS/Android use host-file import. Each task accepts up to 8 files, 5 MiB per file and 20 MiB total. Uploads and unresolved attachment errors block Start task; remove a file or dismiss an error to continue without it.
 
@@ -112,7 +112,7 @@ To refresh dependencies automatically after `git pull`, enable the repository ho
 
 The compatibility and browser tests use the unmodified published `@getpaseo/server` version pinned in `package.json`, temporary projects/homes and OS-assigned ports. They never connect to your normal daemon. The typed provider adapter is supplied by the stock package; its fixture imports are confined to tests. Compatibility tests also pack and load the plugin without its development `node_modules`, verifying that the stock host can compile the distributed source.
 
-The four Paseo development packages are pinned together to one exact version, the default regression-test baseline. These pins control the isolated test host, not the Paseo installation on your machine or the minimum supported version. Test fixtures and version assertions read the `@getpaseo/server` pin, and the compatibility suite fails if any installed Paseo package differs from it. When adopting a new baseline, update all four Paseo packages and the lockfile together and record the [validation evidence](docs/validation.md). The manifest declares only a minimum Paseo version, without an upper bound, so new Paseo releases do not require a plugin release. New Paseo minor and beta releases are checked by running the suites against them, and incompatibilities are fixed in a plugin release instead of capping the range. The minimum is raised only when the plugin needs an API or behavior that older Paseo releases lack. The 0.15.0 minimum covers the 0.15 series, validated with 0.15.4; it does not claim a 0.15.0 test run. `renovate.json` uses the shared Paseo plugin preset for dependency updates.
+The four Paseo development packages are pinned together to one exact version, the default regression-test baseline. These pins control the isolated test host, not the Paseo installation on your machine or the minimum supported version. Test fixtures and version assertions read the `@getpaseo/server` pin, and the compatibility suite fails if any installed Paseo package differs from it. When adopting a new baseline, update all four Paseo packages and the lockfile together and record the [validation evidence](docs/validation.md). The manifest declares only a minimum Paseo version, without an upper bound, so new Paseo releases do not require a plugin release. New Paseo minor and beta releases are checked by running the suites against them, and incompatibilities are fixed in a plugin release instead of capping the range. The minimum is raised only when the plugin needs an API or behavior that older Paseo releases lack. The 0.15 series has been validated with 0.15.0 and 0.15.4. `renovate.json` uses the shared Paseo plugin preset for dependency updates.
 
 For an explicit real-provider smoke with your installed Codex and normal credentials:
 

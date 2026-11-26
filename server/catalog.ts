@@ -10,6 +10,7 @@ import {
   TASK_LABEL,
 } from "../shared/contracts";
 import { listProjects } from "./projects";
+import { listTaskAgents } from "./tasks";
 
 const taskOptionsSchema = z.object({ config: agentOptionsSchema });
 
@@ -24,24 +25,21 @@ function readTaskOptions(label: string) {
 async function lastUsedAgentOptions(paseo: PaseoApi, providerIds: string[]) {
   const remaining = new Set(providerIds);
   const options = new Map<string, z.infer<typeof agentOptionsSchema>>();
-  let cursor: string | undefined;
-  while (remaining.size) {
-    const page = await paseo.agents.list({
-      filter: { labels: { [TASK_LABEL]: "true", [PLUGIN_LABEL]: "true" }, includeArchived: true },
-      sort: [{ key: "created_at", direction: "desc" }],
-      page: { limit: 200, cursor },
-    });
-    for (const { agent } of page.entries) {
-      const label = agent.labels[INPUT_LABEL];
-      if (!label || !remaining.has(agent.provider) || agent.labels["paseo.parent-agent-id"])
-        continue;
-      const config = readTaskOptions(label);
-      if (!config) continue;
-      options.set(agent.provider, config);
-      remaining.delete(agent.provider);
-    }
-    cursor = page.pageInfo.nextCursor ?? undefined;
-    if (!cursor) break;
+  if (!remaining.size) return options;
+
+  const agents = await listTaskAgents(paseo, {
+    labels: { [TASK_LABEL]: "true", [PLUGIN_LABEL]: "true" },
+    includeArchived: true,
+  });
+  agents.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  for (const agent of agents) {
+    const label = agent.labels[INPUT_LABEL];
+    if (!label || !remaining.has(agent.provider) || agent.labels["paseo.parent-agent-id"]) continue;
+    const config = readTaskOptions(label);
+    if (!config) continue;
+    options.set(agent.provider, config);
+    remaining.delete(agent.provider);
+    if (!remaining.size) break;
   }
   return options;
 }

@@ -3,6 +3,7 @@ import { fixture, TASK_LABEL, PLUGIN_LABEL, PASEO_VERSION, deferred } from "./fi
 import {
   DISCOVERY_TOOL,
   ATTACHMENTS_TOOL,
+  catalogRpc,
   tasksRpc,
   archiveRpc,
   attachmentSchema,
@@ -22,6 +23,36 @@ import { launchTask } from "../server/tasks";
 import { createTaskForm } from "../client/form";
 import { archiveEmptyWorkspaces } from "../server/workspace-cleanup";
 import type { CreationSnapshot } from "@getpaseo/protocol/messages";
+
+test("restores settings from the latest archived background coordinator", async () => {
+  const f = await fixture();
+  try {
+    await f.launch();
+    const config = { provider: "codex", model: "gpt-5.4-mini", modeId: "auto" };
+    const background = await f.paseo.agents.create({
+      cwd: f.request.projects[0]!.projectRootPath,
+      config: { provider: "codex/gpt-5.4-mini", modeId: config.modeId },
+      background: true,
+      labels: {
+        [TASK_LABEL]: "true",
+        [PLUGIN_LABEL]: "true",
+        [INPUT_LABEL]: JSON.stringify({ ...f.request, config }),
+      },
+    });
+    expect((await f.paseo.agents.list()).entries.map(({ agent }) => agent.id)).not.toContain(
+      background.id,
+    );
+    await background.archive();
+
+    const catalog = catalogRpc.output.parse(await f.rpc(catalogRpc.name, {}));
+    expect(catalog.providers.find(({ id }) => id === "codex")?.lastUsedOptions).toEqual({
+      model: config.model,
+      modeId: config.modeId,
+    });
+  } finally {
+    await f.close();
+  }
+}, 60000);
 
 test("cleans a definite startup failure and retries unchanged input with a fresh identity", async () => {
   const f = await fixture();

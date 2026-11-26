@@ -124,7 +124,11 @@ function summary(agent: PaseoAgent) {
 }
 export async function listTaskAgents(
   paseo: PaseoApi,
-  filter?: { includeArchived?: boolean; includeInternal?: boolean },
+  filter?: {
+    includeArchived?: boolean;
+    includeInternal?: boolean;
+    labels?: Record<string, string>;
+  },
 ) {
   const agents: PaseoAgent[] = [];
   let cursor: string | undefined;

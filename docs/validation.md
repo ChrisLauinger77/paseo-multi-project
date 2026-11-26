@@ -1,5 +1,11 @@
 # Validation
 
+## Provider settings restoration — 2026-11-26
+
+An isolated installation of the pinned Paseo **0.17.3** packages passed type checking, lint, formatting, all **29 unit tests**, all **24 compatibility tests** and all **four Chromium tests** on macOS arm64 with Node **22.23.5** and npm **10.9.9**. The stock daemon suite loaded the packed plugin and verified that the catalog returns settings from a coordinator hidden from the default agent list and then archived. The unit test supplied unordered pages with a newer invalid record and a child agent. The desktop and compact browser flows launched with the second model, restored it with its Mode and Thinking after switching providers, and checked that changing models resets Thinking.
+
+The same checks passed with the exact minimum **0.15.0**, using the published daemon and bundled web app in a separate installation. That installation pinned all four direct Paseo dependencies to 0.15.0 and adapted two test fixtures. The session-hook test supplied the older request shape, and the fake Codex catalog supplied a second model and Thinking options so the same browser assertions could run. Both installations used Chrome Headless Shell 159.0.8154.6 and deterministic provider adapters.
+
 ## Release 0.1.7 preflight — 2026-11-19
 
 This release publishes the minimum-only requirement `>=0.15.0` (no upper bound), replacing v0.1.6's `>=0.15.0 <0.17.0`. The manifest, README and distributed overview agree. Since v0.1.6, the only distributed-file changes are the manifest requirement, the overview's compatibility sentence, README text and `package.json` version/development pins; plugin runtime code, data access and attachment storage/retention are unchanged. The development baseline is stock Paseo **0.16.2**. Compatibility claims rest on the evidence below: 0.15.4 for the 0.15 series, 0.16.0 and 0.16.2, and 0.17.0-beta.1.

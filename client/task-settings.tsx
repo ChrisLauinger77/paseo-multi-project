@@ -16,9 +16,10 @@ function configForModel(
     provider: provider.id,
     model: model.id,
     modeId: provider.modes.find((mode) => mode.id === options?.modeId)?.id,
-    thinkingOptionId: model.thinkingOptions.find(
-      (option) => option.id === options?.thinkingOptionId,
-    )?.id,
+    thinkingOptionId:
+      options?.model === model.id
+        ? model.thinkingOptions.find((option) => option.id === options.thinkingOptionId)?.id
+        : undefined,
   };
 }
 
@@ -100,10 +101,13 @@ export function TaskSettings({
             disabled={pending}
             onValueChange={(id) => {
               const current = providers.find((p) => p.id === id);
-              const firstModel = current?.models[0];
+              const savedOptions = current?.lastUsedOptions;
+              const selectedModel =
+                current?.models.find((model) => model.id === savedOptions?.model) ??
+                current?.models[0];
               setConfig(
-                current && firstModel
-                  ? configForModel(current, firstModel, current.lastUsedOptions)
+                current && selectedModel
+                  ? configForModel(current, selectedModel, savedOptions)
                   : null,
               );
             }}
