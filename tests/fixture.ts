@@ -38,7 +38,7 @@ export function deferred<T = void>() {
 export async function fixture(
   native = false,
   pluginDirectory = fileURLToPath(new URL("../", import.meta.url)),
-  additionalProviders = false,
+  { additionalProviders = false, projectOptions = false } = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), "paseo-multi-project-test-"));
   const workers = deferred();
@@ -83,6 +83,33 @@ export async function fixture(
       return { status: "accepted" };
     },
   });
+  function draftFeatures(config: AgentSessionConfig) {
+    const values = {
+      ...Reflect.get(config, "featureValues"),
+      ...config.providerOptions,
+    };
+    const features = [{ type: "toggle" as const, id: "test_feature", label: "Test feature" }];
+    if (path.basename(config.cwd) === "alpha") {
+      features.push({ type: "toggle", id: "project_feature", label: "Project option" });
+      if (values.project_feature === true) {
+        features.push({ type: "toggle", id: "dependent_feature", label: "Dependent option" });
+      }
+    }
+    return features.map((feature) => ({ ...feature, value: values[feature.id] === true }));
+  }
+  const projectOptionAdapter = {
+    // The 0.15 stock host asks for features directly. Newer hosts use controls and option values.
+    async listFeatures(config: AgentSessionConfig) {
+      return draftFeatures(config);
+    },
+    async listControls(config: AgentSessionConfig) {
+      const features = draftFeatures(config);
+      return {
+        controls: features.map(({ type, id, label }) => ({ type, key: id, label })),
+        options: Object.fromEntries(features.map(({ id, value }) => [id, value])),
+      };
+    },
+  };
   const provider: AgentClient = {
     provider: inner.provider,
     capabilities: { ...inner.capabilities, supportsNativePaseoTools: native },
@@ -98,6 +125,7 @@ export async function fixture(
       return inner.resumeSession(handle, config, context, options);
     },
     isAvailable: () => inner.isAvailable(),
+    ...(projectOptions && projectOptionAdapter),
     async fetchCatalog(options, context) {
       const catalog = await inner.fetchCatalog(options, context);
       return additionalProviders

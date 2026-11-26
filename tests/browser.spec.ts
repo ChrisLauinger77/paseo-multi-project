@@ -40,7 +40,7 @@ function configureBrowserHost(page: Page, serverId: string, endpoint: string) {
 
 for (const compact of [false, true]) {
   test("stock browser provider defaults, compact=" + compact, async ({ page }) => {
-    const f = await fixture(false, undefined, true);
+    const f = await fixture(false, undefined, { additionalProviders: true });
     try {
       await page.setViewportSize(
         compact ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
@@ -149,18 +149,26 @@ for (const compact of [false, true]) {
       await page.getByRole("button", { name: "Discard changes" }).click();
       await expect(mode).toHaveValue("full-access");
       await mode.selectOption("auto");
-      const updated = { ...saved, codex: { ...saved.codex!, modeId: "bypassPermissions" } };
+      const updated = {
+        codex: { ...saved.codex!, modeId: "bypassPermissions" },
+        claude: { model: "haiku" },
+      };
       await writeDefaults(updated);
       await save.click();
       await expect(page.getByRole("alert")).toContainText(/changed|conflict/i);
       await expect(mode).toHaveValue("auto");
       expect((await readDefaults()).providers).toEqual(updated);
-      await page.getByRole("button", { name: "Reload saved values" }).click();
-      await expect(mode).toHaveValue("bypassPermissions");
+      await page.getByRole("button", { name: "Retry save" }).click();
+      await expect(remove).toBeVisible();
+      expect((await readDefaults()).providers).toEqual({
+        codex: { model: "gpt-5.4-mini", modeId: "auto", thinkingOptionId: "high" },
+        claude: { model: "haiku" },
+      });
+      await writeDefaults(updated);
 
       await page.goto(taskUrl);
       await provider.selectOption("claude");
-      await expect(model).toHaveValue("sonnet");
+      await expect(model).toHaveValue("haiku");
       await provider.selectOption("codex");
       await page.getByTestId("multi-project-prompt").fill("Use configured agent options");
       const project = f.request.projects[0]!;
@@ -169,6 +177,9 @@ for (const compact of [false, true]) {
       await expect(model).toHaveValue("gpt-5.4-mini");
       await expect(mode).toHaveValue("bypassPermissions");
       await expect(thinking).toHaveValue("high");
+      await expect(feature).toBeChecked();
+      await feature.click();
+      await page.getByRole("button", { name: "Reset agent options", exact: true }).click();
       await expect(feature).toBeChecked();
       await feature.click();
       const launch = page.getByTestId("multi-project-launch");
@@ -236,7 +247,7 @@ for (const compact of [false, true]) {
       await provider.selectOption("codex");
       await remove.click();
       await expect(remove).toHaveCount(0);
-      expect((await readDefaults()).providers).toEqual({ claude: saved.claude });
+      expect((await readDefaults()).providers).toEqual({ claude: updated.claude });
       await page.goto(taskUrl);
       await provider.selectOption("codex");
       await expect(model).toHaveValue("gpt-5.4-mini");
@@ -250,7 +261,7 @@ for (const compact of [false, true]) {
       await page.getByTestId("multi-project-target-" + project.projectId).click();
       await expect(page.getByRole("alert")).toContainText('Model "removed-model" is unavailable.');
       await expect(launch).toBeDisabled();
-      await page.getByRole("button", { name: "Reset agent options" }).click();
+      await page.getByRole("button", { name: "Use standard agent options" }).click();
       await expect(model).toHaveValue("gpt-5.4-mini");
       await expect(launch).toBeEnabled();
       expect((await readDefaults()).providers.codex).toEqual({ model: "removed-model" });
@@ -259,6 +270,119 @@ for (const compact of [false, true]) {
     }
   });
 }
+
+test("stock browser uses project context and chosen values for provider options", async ({
+  page,
+}) => {
+  const f = await fixture(false, undefined, { projectOptions: true });
+  try {
+    const serverId = f.daemon.daemon.getServerId();
+    const endpoint = `127.0.0.1:${f.daemon.port}`;
+    const origin = `http://${endpoint}`;
+    let catalogRequests = 0;
+    let failCatalog = false;
+    let failedCatalogRequest: string | undefined;
+    await page.routeWebSocket(/\/ws(?:\?|$)/, (route) => {
+      const server = route.connectToServer();
+      route.onMessage((data) => {
+        if (data.toString().startsWith("{")) {
+          const message = findRpc(JSON.parse(data.toString()));
+          if (message?.type === "plugin.rpc.invoke.request" && message.method === "catalog.read") {
+            catalogRequests++;
+            if (failCatalog) {
+              failCatalog = false;
+              failedCatalogRequest = message.requestId;
+            }
+          }
+        }
+        server.send(data);
+      });
+      server.onMessage((data) => {
+        if (failedCatalogRequest && data.toString().startsWith("{")) {
+          const envelope = JSON.parse(data.toString());
+          const message = findRpc(envelope);
+          if (
+            message?.type === "plugin.rpc.invoke.response" &&
+            message.payload.requestId === failedCatalogRequest
+          ) {
+            Object.assign(message, {
+              type: "rpc_error",
+              payload: { requestId: failedCatalogRequest, error: "Catalog request failed" },
+            });
+            failedCatalogRequest = undefined;
+            route.send(JSON.stringify(envelope));
+            return;
+          }
+        }
+        route.send(data);
+      });
+    });
+    const alpha = f.projects.find((project) => path.basename(project.projectRootPath) === "alpha")!;
+    const beta = f.projects.find((project) => path.basename(project.projectRootPath) === "beta")!;
+    const provider = page.getByRole("combobox", { name: "Provider", exact: true });
+    const projectOption = page.getByRole("switch", { name: "Project option" });
+    const dependentOption = page.getByRole("switch", { name: "Dependent option" });
+    const commonOption = page.getByRole("switch", { name: "Test feature" });
+
+    await configureBrowserHost(page, serverId, endpoint);
+    await page.goto(
+      `${origin}/settings/hosts/${serverId}/plugins/paseo-multi-project/agent-defaults`,
+    );
+    await provider.selectOption("codex");
+    await expect(commonOption).toBeVisible();
+    expect(catalogRequests).toBe(0);
+    await expect(projectOption).toHaveCount(0);
+    await page.getByRole("button", { name: "Choose project context" }).click();
+    await page.getByRole("combobox", { name: "Project context" }).selectOption(alpha.projectId);
+    await commonOption.click();
+    await expect(dependentOption).toHaveCount(0);
+    await projectOption.click();
+    await expect(dependentOption).toBeVisible();
+    await dependentOption.click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Remove saved default" })).toBeVisible();
+
+    await page.goto(`${origin}/h/${serverId}/plugin/paseo-multi-project/surface/tasks`);
+    await page.getByTestId("multi-project-prompt").fill("Use project-specific defaults");
+    await provider.selectOption("codex");
+    await page.getByTestId(`multi-project-target-${alpha.projectId}`).click();
+    await page.getByTestId("multi-project-options-toggle").click();
+    await expect(projectOption).toBeChecked();
+    await expect(dependentOption).toBeChecked();
+    const launch = page.getByTestId("multi-project-launch");
+    await expect(launch).toBeEnabled();
+
+    failCatalog = true;
+    const refresh = page.getByTestId("multi-project-refresh");
+    await refresh.click();
+    await expect(page.getByRole("alert")).toHaveText("Catalog request failed");
+    await expect(launch).toBeDisabled();
+    await refresh.click();
+    await expect(launch).toBeEnabled();
+
+    await page.getByTestId(`multi-project-target-${alpha.projectId}`).click();
+    await page.getByTestId(`multi-project-target-${beta.projectId}`).click();
+    await expect(page.getByRole("alert")).toContainText(
+      'Agent option "project_feature" is unavailable.',
+    );
+    await expect(launch).toBeDisabled();
+    await page.getByRole("button", { name: "Remove unavailable options" }).click();
+    await expect(commonOption).toBeChecked();
+    await expect(launch).toBeEnabled();
+    const { read } = settingsRpc(agentDefaults.id);
+    expect(await f.rpc(read.name, {})).toMatchObject({
+      values: {
+        providers: {
+          codex: {
+            featureValues: { test_feature: true, project_feature: true, dependent_feature: true },
+          },
+        },
+      },
+    });
+  } finally {
+    await f.close();
+  }
+});
 
 for (const observationFails of [false, true]) {
   test(`reads tasks after observation settles, observation failure=${observationFails}`, async ({

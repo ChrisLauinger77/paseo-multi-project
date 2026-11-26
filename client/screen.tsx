@@ -8,8 +8,9 @@ import { agentDefaults } from "../shared/agent-defaults";
 import { catalogRpc, launchRpc, prepareRpc, tasksRpc } from "../shared/contracts";
 import {
   catalogOptionError,
-  featureOptionError,
   initialAgentConfig,
+  sameAgentConfig,
+  unavailableFeatureOptions,
   useAgentFeatures,
 } from "./agent-config";
 import { createTaskForm } from "./form";
@@ -45,14 +46,35 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const projects = catalog.data?.projects || [];
   const providers = catalog.data?.providers || [];
   const selectedProvider = providers.find((p) => p.id === state.config?.provider);
-  const catalogIssue = catalogOptionError(state.config, selectedProvider);
+  const catalogIssue = catalog.isSuccess
+    ? catalogOptionError(state.config, selectedProvider)
+    : null;
   const cwd = state.projects[0]?.projectRootPath ?? null;
-  const featureConfig = catalogIssue ? null : state.config;
+  const featureConfig = catalog.isSuccess && !catalogIssue ? state.config : null;
   const features = useAgentFeatures(featureConfig, cwd);
-  const optionIssue = catalogIssue ?? featureOptionError(state.config, features.data?.features);
-  const resetConfig =
+  const unavailable = unavailableFeatureOptions(
+    state.config,
+    features.isSuccess && !features.isPlaceholderData ? features.data.features : undefined,
+  );
+  const standardConfig =
     selectedProvider?.status === "ready"
       ? initialAgentConfig(selectedProvider.id, selectedProvider)
+      : null;
+  function configForProvider(id: string) {
+    return initialAgentConfig(
+      id,
+      providers.find((p) => p.id === id),
+      defaults.status === "ready" ? defaults.values.providers : undefined,
+    );
+  }
+  const resetConfig =
+    state.config && catalog.isSuccess && defaults.status !== "loading"
+      ? configForProvider(state.config.provider)
+      : null;
+  const canReset = resetConfig && state.config && !sameAgentConfig(state.config, resetConfig);
+  const clearFeatureConfig =
+    features.error && state.config?.featureValues
+      ? { ...state.config, featureValues: undefined }
       : null;
   useEffect(() => {
     const lifetime = new AbortController();
@@ -101,10 +123,11 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
     !state.attachmentError &&
     Boolean(state.task.trim() && state.projects.length && state.config) &&
     !missing &&
-    !optionIssue &&
-    !features.isPending &&
-    !features.error &&
-    !catalog.error;
+    !catalogIssue &&
+    !unavailable &&
+    features.isSuccess &&
+    !features.isPlaceholderData &&
+    catalog.isSuccess;
   const styles = useMemo(
     () => ({
       page: { flex: 1, backgroundColor: theme.colors.surface0 },
@@ -164,13 +187,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   }
   function selectProvider(id: string) {
     if (defaults.status === "loading") return;
-    form.setConfig(
-      initialAgentConfig(
-        id,
-        providers.find((p) => p.id === id),
-        defaults.status === "ready" ? defaults.values.providers : undefined,
-      ),
-    );
+    form.setConfig(configForProvider(id));
   }
   async function submit() {
     const result = await form.submit({ prepare: () => prepare({}), launch });
@@ -268,26 +285,41 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
           </Pressable>
         </View>
       ) : null}
-      {optionIssue ? (
+      {catalogIssue || unavailable || features.error ? (
         <View style={styles.group}>
           <Text style={styles.error} accessibilityRole="alert">
-            {optionIssue}
+            {catalogIssue ?? unavailable?.message ?? features.error?.message}
           </Text>
-          {resetConfig ? (
+          {catalogIssue && standardConfig ? (
             <Pressable
               accessibilityRole="button"
               disabled={state.pending}
-              onPress={() => form.setConfig(resetConfig)}
+              onPress={() => form.setConfig(standardConfig)}
             >
-              <Text style={styles.link}>Reset agent options</Text>
+              <Text style={styles.link}>Use standard agent options</Text>
+            </Pressable>
+          ) : null}
+          {unavailable || clearFeatureConfig ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={state.pending}
+              onPress={() => form.setConfig(unavailable?.config ?? clearFeatureConfig)}
+            >
+              <Text style={styles.link}>
+                {unavailable ? "Remove unavailable options" : "Clear provider options"}
+              </Text>
             </Pressable>
           ) : null}
         </View>
       ) : null}
-      {features.error ? (
-        <Text style={styles.error} accessibilityRole="alert">
-          {features.error.message}
-        </Text>
+      {canReset ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={state.pending}
+          onPress={() => form.setConfig(resetConfig)}
+        >
+          <Text style={styles.link}>Reset agent options</Text>
+        </Pressable>
       ) : null}
       {state.error ? (
         <Text style={styles.error} accessibilityRole="alert" testID="multi-project-error">

@@ -7,9 +7,10 @@ Read [docs/architecture.md](docs/architecture.md) for the execution flow and [do
 ## Code map
 
 - `client/screen.tsx` composes the screen and owns SDK subscriptions; `client/form.ts` owns form state and retry identity. Keep browser DOM/file APIs behind the platform checks in `client/web.ts`; native UI uses the host SDK.
+- `client/agent-defaults-screen.tsx` edits host defaults. `client/agent-config.ts` owns option discovery and validation, and `client/agent-options.tsx` supplies controls shared by the settings and task forms.
 - `server/tasks.ts` validates launches, creates coordinators and derives the task list from agent records. `server/archive.ts` handles task/worker archival through agent APIs; `server/workspace-cleanup.ts` handles optional empty Local workspace archival.
 - `server/attachments.ts` owns durable file copies and integrity checks; `server/attachment-tool.ts` supplies task-scoped lookup. `server/discovery.ts` supplies coordinator-only project discovery.
-- `shared/contracts.ts` owns labels, RPC schemas and limits; `shared/prompt.ts` owns the fixed orchestration instructions.
+- `shared/contracts.ts` owns labels, RPC schemas and limits. `shared/agent-defaults.ts` defines the host settings document, `shared/catalog.ts` projects the provider catalog, and `shared/prompt.ts` owns the fixed orchestration instructions.
 - `tests/fixture.ts` supplies the isolated stock daemon and typed provider adapter used by compatibility and browser tests.
 
 ## Runtime invariants

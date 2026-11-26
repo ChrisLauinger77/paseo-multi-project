@@ -1,52 +1,99 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
-import { type PluginSurfaceProps, useRpc, useSettings } from "@getpaseo/plugin/client";
+import { settingsRpc } from "@getpaseo/plugin";
+import { type PluginSurfaceProps, usePaseo, useRpc, useSettings } from "@getpaseo/plugin/client";
 import { Loading, SettingsAction, SettingsSection } from "@getpaseo/plugin/client/ui";
 import { useQuery } from "@tanstack/react-query";
 import { agentDefaults } from "../shared/agent-defaults";
-import { catalogRpc, type TaskAgentConfig } from "../shared/contracts";
+import { catalogProviders } from "../shared/catalog";
+import type { TaskAgentConfig } from "../shared/contracts";
 import {
   catalogOptionError,
-  featureOptionError,
   initialAgentConfig,
+  unavailableFeatureOptions,
   useAgentFeatures,
 } from "./agent-config";
 import { AgentModelSelect, AgentOptions, AgentProviderSelect } from "./agent-options";
+import { CompactSelect } from "./compact-select";
+
+const readAgentDefaults = settingsRpc(agentDefaults.id).read;
 
 export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
   const settings = useSettings(agentDefaults);
-  const readCatalog = useRpc(catalogRpc);
-  const catalog = useQuery({ queryKey: ["catalog"], queryFn: () => readCatalog({}), retry: false });
+  const readSaved = useRpc(readAgentDefaults);
+  const paseo = usePaseo();
+  const catalog = useQuery({
+    queryKey: ["providers"],
+    queryFn: async () => catalogProviders(await paseo.providers.waitForReady()),
+    retry: false,
+  });
   const [providerId, setProviderId] = useState("");
+  const [showProjects, setShowProjects] = useState(false);
+  const [projectId, setProjectId] = useState("");
   const [draft, setDraft] = useState<{ config: TaskAgentConfig; revision: string } | null>(null);
-  const providers = catalog.data?.providers ?? [];
+  const [retryingSave, setRetryingSave] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const providers = catalog.data ?? [];
   const provider = providers.find((p) => p.id === providerId);
   const saved = settings.status === "ready" ? settings.values.providers : undefined;
   const hasSavedDefault = Boolean(saved && Object.hasOwn(saved, providerId));
   const config = draft?.config ?? initialAgentConfig(providerId, provider, saved);
   const standardConfig =
     provider?.status === "ready" ? initialAgentConfig(providerId, provider) : null;
-  const catalogIssue = catalogOptionError(config, provider);
-  const features = useAgentFeatures(catalogIssue ? null : config);
-  const optionIssue = catalogIssue ?? featureOptionError(config, features.data?.features);
+  const projects = useQuery({
+    queryKey: ["project-contexts"],
+    queryFn: async () => (await paseo.projects.list()).projects,
+    enabled: showProjects && Boolean(config),
+    retry: false,
+  });
+  const project = projects.data?.find((project) => project.projectId === projectId);
+  const projectMissing = Boolean(projectId && projects.isSuccess && !project);
+  const cwd = projectId ? (project?.projectRootPath ?? null) : undefined;
+  const catalogIssue = catalog.isSuccess ? catalogOptionError(config, provider) : null;
+  const features = useAgentFeatures(catalog.isSuccess && !catalogIssue ? config : null, cwd);
+  const unavailable = unavailableFeatureOptions(
+    config,
+    features.isSuccess && !features.isPlaceholderData ? features.data.features : undefined,
+  );
+  const optionIssue = catalogIssue ?? unavailable?.message;
   const errorStyle = { color: theme.colors.statusDanger };
+  const saving = settings.saving || retryingSave;
+  const canSave = !saving && !optionIssue && features.isSuccess && !features.isPlaceholderData;
 
-  async function save(remove: boolean) {
-    if (settings.status !== "ready" || !config || settings.saving) return;
+  async function save(action: "save" | "remove" | "retry") {
+    const remove = action === "remove";
+    const retry = action === "retry";
+    if (settings.status !== "ready" || !config || saving || (!remove && !canSave)) return;
     const { model, modeId, thinkingOptionId, featureValues } = config;
-    const defaults = {
-      ...settings.values.providers,
-      [providerId]: {
-        model,
-        ...(modeId && { modeId }),
-        ...(thinkingOptionId && { thinkingOptionId }),
-        ...(featureValues && { featureValues }),
-      },
-    };
-    if (remove) delete defaults[providerId];
-    if (await settings.save({ providers: defaults }, draft?.revision ?? settings.revision)) {
-      setDraft(null);
-      if (remove && !standardConfig) setProviderId("");
+    if (retry) setRetryingSave(true);
+    setRetryError(null);
+    try {
+      let values = settings.values;
+      let revision = draft?.revision ?? settings.revision;
+      if (retry) {
+        const latest = await readSaved({});
+        if (latest.status !== "ready") throw new Error(latest.error);
+        values = agentDefaults.schema.parse(latest.values);
+        revision = latest.revision;
+      }
+      const defaults = {
+        ...values.providers,
+        [providerId]: {
+          model,
+          ...(modeId && { modeId }),
+          ...(thinkingOptionId && { thinkingOptionId }),
+          ...(featureValues && { featureValues }),
+        },
+      };
+      if (remove) delete defaults[providerId];
+      if (await settings.save({ providers: defaults }, revision)) {
+        setDraft(null);
+        if (remove && !standardConfig) setProviderId("");
+      }
+    } catch (error) {
+      setRetryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (retry) setRetryingSave(false);
     }
   }
 
@@ -93,7 +140,7 @@ export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
           providers={providers}
           savedProviderIds={Object.keys(settings.values.providers)}
           value={providerId}
-          disabled={catalog.isPending || settings.saving || Boolean(draft)}
+          disabled={catalog.isPending || saving || Boolean(draft)}
           onValueChange={setProviderId}
         />
         {config ? (
@@ -102,16 +149,54 @@ export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
               config={config}
               provider={provider}
               theme={theme}
-              disabled={settings.saving}
+              disabled={saving}
               setConfig={updateConfig}
             />
+            {showProjects ? (
+              <>
+                <CompactSelect
+                  theme={theme}
+                  label="Project context"
+                  value={projectId}
+                  options={[
+                    { value: "", label: "Daemon home" },
+                    ...(projectMissing ? [{ value: projectId, label: "Unavailable project" }] : []),
+                    ...(projects.data ?? []).map((item) => ({
+                      value: item.projectId,
+                      label: item.projectCustomName || item.projectDisplayName,
+                    })),
+                  ]}
+                  disabled={saving || projects.isPending}
+                  onValueChange={setProjectId}
+                />
+                {projectMissing ? (
+                  <Text accessibilityRole="alert" style={errorStyle}>
+                    The selected project is no longer registered.
+                  </Text>
+                ) : null}
+                {projects.error ? (
+                  <SettingsAction
+                    label={projects.error.message}
+                    actionLabel="Retry loading projects"
+                    onPress={() => void projects.refetch()}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <SettingsAction
+                label="Project-specific options"
+                actionLabel="Choose project context"
+                disabled={saving}
+                onPress={() => setShowProjects(true)}
+              />
+            )}
             <AgentOptions
               config={config}
               provider={provider}
               features={features.data?.features ?? []}
               compact={layout.compact}
               theme={theme}
-              disabled={settings.saving}
+              disabled={saving}
               setConfig={updateConfig}
             />
             {optionIssue ? (
@@ -119,12 +204,20 @@ export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
                 <Text accessibilityRole="alert" style={errorStyle}>
                   {optionIssue}
                 </Text>
-                {standardConfig ? (
+                {catalogIssue && standardConfig ? (
                   <SettingsAction
                     label="Standard options"
-                    actionLabel="Reset agent options"
-                    disabled={settings.saving}
+                    actionLabel="Use standard agent options"
+                    disabled={saving}
                     onPress={() => updateConfig(standardConfig)}
+                  />
+                ) : null}
+                {unavailable ? (
+                  <SettingsAction
+                    label="Current project context"
+                    actionLabel="Remove unavailable options"
+                    disabled={saving}
+                    onPress={() => updateConfig(unavailable.config)}
                   />
                 ) : null}
               </>
@@ -139,48 +232,54 @@ export function AgentDefaultsScreen({ theme, layout }: PluginSurfaceProps) {
                   actionLabel="Retry"
                   onPress={() => void features.refetch()}
                 />
+                {config.featureValues ? (
+                  <SettingsAction
+                    label="Provider-specific options"
+                    actionLabel="Clear provider options"
+                    disabled={saving}
+                    onPress={() => updateConfig({ ...config, featureValues: undefined })}
+                  />
+                ) : null}
               </>
             ) : null}
-            {settings.saveError ? (
+            {retryError || settings.saveError ? (
               <>
                 <Text accessibilityRole="alert" style={errorStyle}>
-                  {settings.saveError}
+                  {retryError ?? settings.saveError}
                 </Text>
-                <SettingsAction
-                  label="Saved configuration"
-                  actionLabel="Reload saved values"
-                  disabled={settings.saving}
-                  onPress={() => {
-                    setDraft(null);
-                    void settings.reload();
-                  }}
-                />
+                {draft ? (
+                  <SettingsAction
+                    label="Save your draft over this provider’s current settings"
+                    actionLabel="Retry save"
+                    disabled={!canSave}
+                    onPress={() => void save("retry")}
+                  />
+                ) : null}
               </>
             ) : null}
             <SettingsAction
               label="Provider default"
               actionLabel="Save"
-              disabled={
-                settings.saving ||
-                Boolean(optionIssue || features.error) ||
-                features.isPending ||
-                (!draft && hasSavedDefault)
-              }
-              onPress={() => void save(false)}
+              disabled={!canSave || (!draft && hasSavedDefault)}
+              onPress={() => void save("save")}
             />
             {draft ? (
               <SettingsAction
                 label="Unsaved changes"
                 actionLabel="Discard changes"
-                disabled={settings.saving}
-                onPress={() => setDraft(null)}
+                disabled={saving}
+                onPress={() => {
+                  setDraft(null);
+                  setRetryError(null);
+                  if (settings.saveError) void settings.reload();
+                }}
               />
             ) : hasSavedDefault ? (
               <SettingsAction
                 label="Saved configuration"
                 actionLabel="Remove saved default"
-                disabled={settings.saving}
-                onPress={() => void save(true)}
+                disabled={saving}
+                onPress={() => void save("remove")}
               />
             ) : null}
           </>

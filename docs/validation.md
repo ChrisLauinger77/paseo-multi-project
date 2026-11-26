@@ -2,9 +2,9 @@
 
 ## Per-provider agent defaults — 2026-11-26
 
-On macOS arm64 with CI-pinned Node 22.23.5 and npm 10.9.9, typecheck, lint and formatting passed against stock Paseo 0.17.3. All 51 unit and compatibility tests and all six Chromium browser tests passed. The package dry run listed 35 files, including the settings screen, shared controls and settings schema. The compatibility suite loaded the packed source without development dependencies.
+On macOS arm64 with CI-pinned Node 22.23.5 and npm 10.9.9, typecheck, lint and formatting passed against the branch's stock Paseo 0.17.5 pin. All 28 unit tests, 23 compatibility tests and seven Chromium browser tests passed. The package dry run listed 36 files. The compatibility suite loaded the packed source without development dependencies. An earlier run against Paseo 0.17.3 covered the initial defaults implementation.
 
-The two provider-defaults browser tests passed on desktop and compact layouts in a separate stock Paseo 0.15.0 installation. Its typecheck and lint also passed after removing two newer session-hook fields from an existing test fixture in that copy. The browser tests cover independent provider settings, reloads, write conflicts, per-task overrides, settings updates during a launch retry, stale model recovery, and delivery of the effective options to the coordinator and worker instructions.
+The three focused provider-defaults browser tests also passed in a separate stock Paseo 0.15.0 installation. Its typecheck and lint passed after removing two newer session-hook fields from an existing test fixture in that copy. Browser coverage includes desktop and compact settings, project-only and dependent options, catalog failure recovery, retrying a conflicted save, task-only overrides, and unchanged launch retries after saved settings change.
 
 ## Release 0.1.7 preflight — 2026-11-19
 

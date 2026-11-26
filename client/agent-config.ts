@@ -42,42 +42,76 @@ export function catalogOptionError(config: TaskAgentConfig | null, provider?: Ca
   return null;
 }
 
-export function featureOptionError(
+export function sameAgentConfig(left: TaskAgentConfig, right: TaskAgentConfig) {
+  if (
+    left.provider !== right.provider ||
+    left.model !== right.model ||
+    left.modeId !== right.modeId ||
+    left.thinkingOptionId !== right.thinkingOptionId
+  )
+    return false;
+  const leftFeatures = Object.entries(left.featureValues ?? {});
+  const rightFeatures = right.featureValues ?? {};
+  return (
+    leftFeatures.length === Object.keys(rightFeatures).length &&
+    leftFeatures.every(([id, value]) => rightFeatures[id] === value)
+  );
+}
+
+export function unavailableFeatureOptions(
   config: TaskAgentConfig | null,
   features?: TaskFeatures["features"],
 ) {
-  if (!features) return null;
-  for (const [id, value] of Object.entries(config?.featureValues ?? {})) {
+  if (!config?.featureValues || !features) return null;
+  const featureValues = { ...config.featureValues };
+  const messages = [];
+  for (const [id, value] of Object.entries(config.featureValues)) {
     const feature = features.find((feature) => feature.id === id);
-    if (!feature) return `Agent option "${id}" is unavailable.`;
     const valid =
-      feature.type === "toggle"
+      feature?.type === "toggle"
         ? typeof value === "boolean"
-        : value === null || feature.options.some((option) => option.id === value);
-    if (!valid) return `Value "${value}" for "${feature.label}" is unavailable.`;
+        : feature?.type === "select" &&
+          (value === null || feature.options.some((option) => option.id === value));
+    if (valid) continue;
+    delete featureValues[id];
+    messages.push(
+      feature
+        ? `Value "${value}" for "${feature.label}" is unavailable.`
+        : `Agent option "${id}" is unavailable.`,
+    );
   }
-  return null;
+  return messages.length
+    ? {
+        message: messages.join(" "),
+        config: {
+          ...config,
+          featureValues: Object.keys(featureValues).length ? featureValues : undefined,
+        },
+      }
+    : null;
 }
 
 // A null directory skips discovery. An omitted directory uses the daemon home.
 export function useAgentFeatures(config: TaskAgentConfig | null, cwd?: string | null) {
   const readFeatures = useRpc(featuresRpc);
-  // Discover the available values even when a saved feature value is now invalid.
-  const input =
-    config && cwd !== null
-      ? {
-          config: {
-            provider: config.provider,
-            model: config.model,
-            modeId: config.modeId,
-            thinkingOptionId: config.thinkingOptionId,
-          },
-          cwd,
-        }
-      : null;
+  const input = config && cwd !== null ? { config, cwd } : null;
+  const scope = input && [
+    input.cwd,
+    input.config.provider,
+    input.config.model,
+    input.config.modeId,
+    input.config.thinkingOptionId,
+  ];
   return useQuery({
-    queryKey: ["features", input],
+    queryKey: ["features", scope, input?.config.featureValues] as const,
     queryFn: input ? () => readFeatures(input) : skipToken,
+    // Keep controls visible during option edits in the same directory and agent configuration.
+    placeholderData(previous, query) {
+      const previousScope = query?.queryKey[1];
+      return previousScope && scope?.every((part, index) => part === previousScope[index])
+        ? previous
+        : undefined;
+    },
     retry: false,
   });
 }
