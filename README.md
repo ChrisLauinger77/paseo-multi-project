@@ -12,11 +12,11 @@ This is a standalone plugin. It requires no Paseo fork or upstream PR #5014. The
 
 ## Requirements
 
-- Requires Paseo daemon and connected app **0.15 or newer** (`>=0.15.0`). Tested with 0.15.x, 0.16.x and 0.17.0-beta.1. Newer Paseo releases are accepted without a plugin update; please report incompatibilities.
+- Requires Paseo daemon and connected app **0.15 or newer** (`>=0.15.0`). Tested with 0.15.x, 0.16.x and 0.17.5. Newer Paseo releases are accepted without a plugin update; please report incompatibilities.
 - An enabled, available coding-agent provider with Paseo tool delivery enabled. Both MCP and native delivery are exercised by automated compatibility tests.
 - Existing registered projects on one host. Worktree isolation requires all selected projects to be Git repositories.
 
-The plugin is experimental. Automated browser checks cover Linux desktop and compact web layouts. Native iOS/Android and additional real providers need testing. See [validation](docs/validation.md) for exact evidence.
+The plugin is experimental. Automated browser checks cover desktop and compact web layouts on Linux and macOS. Native iOS/Android and additional real providers need testing. See [validation](docs/validation.md) for exact evidence.
 
 ## Install
 
@@ -38,7 +38,7 @@ Connected desktop, web and mobile clients receive the client contribution from t
 To install a specific release directly from Git:
 
 ```sh
-paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.7
+paseo plugin install git:ChrisLauinger77/paseo-multi-project --ref v0.1.8
 ```
 
 The initial `--ref` selects the installed tag; it does not permanently pin all future update checks. Review the proposed revision before applying an update. Use Paseo's plugin update controls rather than replacing managed files.

@@ -1,5 +1,11 @@
 # Validation
 
+## Release 0.1.8 preflight — 2026-11-26
+
+The release candidate uses stock Paseo 0.17.5, CI-pinned Node 22.23.5, and npm 10.9.9 on macOS arm64. A clean `npm ci` passed, followed by formatting, typecheck, lint, and the format check. All 28 unit, 23 compatibility, and seven Chromium browser tests passed. The compatibility suite loaded the packed source without development dependencies.
+
+The package dry run listed 36 files and included the manifest, both runtime entries, all 26 local runtime modules, the overview, and both declared assets. The declared screenshot was refreshed from a stock-browser test with sample projects and attachments and compared with the fresh desktop release capture. Earlier evidence below covers the focused 0.15.0 tests. The real-provider smoke and native-device testing remain opt-in or separate from this preflight.
+
 ## Per-provider agent defaults — 2026-11-26
 
 On macOS arm64 with CI-pinned Node 22.23.5 and npm 10.9.9, typecheck, lint and formatting passed against the branch's stock Paseo 0.17.5 pin. All 28 unit tests, 23 compatibility tests and seven Chromium browser tests passed. The package dry run listed 36 files. The compatibility suite loaded the packed source without development dependencies. An earlier run against Paseo 0.17.3 covered the initial defaults implementation.
