@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
-import { usePaseo, useRpc } from "@getpaseo/plugin/client";
+import { usePaseo, useRpc, useSettings } from "@getpaseo/plugin/client";
 import { Loading, ScrollView, TextInput } from "@getpaseo/plugin/client/ui";
-import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
-import { catalogRpc, featuresRpc, launchRpc, prepareRpc, tasksRpc } from "../shared/contracts";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { agentDefaults } from "../shared/agent-defaults";
+import { catalogRpc, launchRpc, prepareRpc, tasksRpc } from "../shared/contracts";
+import {
+  catalogOptionError,
+  initialAgentConfig,
+  sameAgentConfig,
+  useAgentFeatures,
+} from "./agent-config";
 import { createTaskForm } from "./form";
 import { ArchiveTask } from "./archive-task";
 import { ProjectPicker } from "./project-picker";
@@ -15,8 +22,8 @@ import { createTaskRefresh } from "./task-refresh";
 export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   const [form] = useState(createTaskForm);
   const state = useSyncExternalStore(form.subscribe, form.getState, form.getState);
+  const defaults = useSettings(agentDefaults);
   const readCatalog = useRpc(catalogRpc),
-    readFeatures = useRpc(featuresRpc),
     readTasks = useRpc(tasksRpc),
     launch = useRpc(launchRpc),
     prepare = useRpc(prepareRpc);
@@ -36,22 +43,35 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
     retry: false,
   });
   const projects = catalog.data?.projects || [];
-  const selectedProvider = catalog.data?.providers.find((p) => p.id === state.config?.provider);
-  const selectedModel = selectedProvider?.models.find((m) => m.id === state.config?.model);
-  const cwd = state.projects[0]?.projectRootPath || "";
-  const featureInput = state.config && cwd ? { config: state.config, cwd } : null;
-  const features = useQuery({
-    queryKey: [
-      "features",
-      state.config?.provider,
-      state.config?.model,
-      state.config?.modeId,
-      state.config?.thinkingOptionId,
-      cwd,
-    ],
-    queryFn: featureInput ? () => readFeatures(featureInput) : skipToken,
-    retry: false,
-  });
+  const providers = catalog.data?.providers || [];
+  const selectedProvider = providers.find((p) => p.id === state.config?.provider);
+  const catalogIssue = catalog.isSuccess
+    ? catalogOptionError(state.config, selectedProvider)
+    : null;
+  const cwd = state.projects[0]?.projectRootPath ?? null;
+  const featureConfig = catalog.isSuccess && !catalogIssue ? state.config : null;
+  const features = useAgentFeatures(featureConfig, cwd, form.setConfig);
+  const unavailable = features.unavailable;
+  const standardConfig =
+    selectedProvider?.status === "ready"
+      ? initialAgentConfig(selectedProvider.id, selectedProvider)
+      : null;
+  function configForProvider(id: string) {
+    return initialAgentConfig(
+      id,
+      providers.find((p) => p.id === id),
+      defaults.status === "ready" ? defaults.values.providers : undefined,
+    );
+  }
+  const resetConfig =
+    state.config && catalog.isSuccess && defaults.status !== "loading"
+      ? configForProvider(state.config.provider)
+      : null;
+  const canReset = resetConfig && state.config && !sameAgentConfig(state.config, resetConfig);
+  const clearFeatureConfig =
+    features.error && state.config?.featureValues
+      ? { ...state.config, featureValues: undefined }
+      : null;
   useEffect(() => {
     const lifetime = new AbortController();
     let release: (() => Promise<void>) | undefined;
@@ -97,11 +117,13 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
     !state.pending &&
     !state.attachmentPending &&
     !state.attachmentError &&
-    Boolean(state.task.trim() && state.projects.length && state.config && selectedModel) &&
+    Boolean(state.task.trim() && state.projects.length && state.config) &&
     !missing &&
-    !features.isPending &&
-    !features.error &&
-    !catalog.error;
+    !catalogIssue &&
+    !unavailable &&
+    features.isSuccess &&
+    !features.isPlaceholderData &&
+    catalog.isSuccess;
   const styles = useMemo(
     () => ({
       page: { flex: 1, backgroundColor: theme.colors.surface0 },
@@ -156,8 +178,12 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
   function refresh() {
     void catalog.refetch();
     void tasks.refetch();
-    if (featureInput) void features.refetch();
+    if (featureConfig && cwd) void features.refetch();
     setWatchVersion((v) => v + 1);
+  }
+  function selectProvider(id: string) {
+    if (defaults.status === "loading") return;
+    form.setConfig(configForProvider(id));
   }
   async function submit() {
     const result = await form.submit({ prepare: () => prepare({}), launch });
@@ -233,19 +259,64 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
       <TaskSettings
         config={state.config}
         isolation={state.isolation}
-        providers={catalog.data?.providers || []}
+        providers={providers}
         features={features.data?.features || []}
         canWorktree={canWorktree}
         pending={state.pending}
+        defaultsLoading={defaults.status === "loading"}
         compact={layout.compact}
         theme={theme}
+        selectProvider={selectProvider}
         setConfig={form.setConfig}
+        setFeatureValue={features.setFeatureValue}
         setIsolation={form.setIsolation}
       />
-      {featureInput && features.error ? (
-        <Text style={styles.error} accessibilityRole="alert">
-          {features.error.message}
-        </Text>
+      {defaults.status === "error" || defaults.status === "invalid" ? (
+        <View style={styles.group}>
+          <Text style={styles.error} accessibilityRole="alert">
+            Could not load saved agent defaults. You can configure this task manually.{" "}
+            {defaults.error}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={() => void defaults.reload()}>
+            <Text style={styles.link}>Retry loading agent defaults</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {catalogIssue || unavailable || features.error ? (
+        <View style={styles.group}>
+          <Text style={styles.error} accessibilityRole="alert">
+            {catalogIssue ?? unavailable?.message ?? features.error?.message}
+          </Text>
+          {catalogIssue && standardConfig ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={state.pending}
+              onPress={() => form.setConfig(standardConfig)}
+            >
+              <Text style={styles.link}>Use standard agent options</Text>
+            </Pressable>
+          ) : null}
+          {unavailable || clearFeatureConfig ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={state.pending}
+              onPress={() => form.setConfig(unavailable?.config ?? clearFeatureConfig)}
+            >
+              <Text style={styles.link}>
+                {unavailable ? "Remove unavailable options" : "Clear provider options"}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {canReset ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={state.pending}
+          onPress={() => form.setConfig(resetConfig)}
+        >
+          <Text style={styles.link}>Reset agent options</Text>
+        </Pressable>
       ) : null}
       {state.error ? (
         <Text style={styles.error} accessibilityRole="alert" testID="multi-project-error">

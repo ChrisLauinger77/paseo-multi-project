@@ -38,6 +38,7 @@ export function deferred<T = void>() {
 export async function fixture(
   native = false,
   pluginDirectory = fileURLToPath(new URL("../", import.meta.url)),
+  { additionalProviders = false, projectOptions = false } = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), "paseo-multi-project-test-"));
   const workers = deferred();
@@ -47,6 +48,7 @@ export async function fixture(
   const bothDelivered = deferred();
   const launches: Array<{ config: AgentSessionConfig; context?: AgentLaunchContext }> = [];
   const notifications: string[] = [];
+  const rejectedOptions: string[] = [];
   const firstPrompt = deferred<AgentPromptInput>();
   const sessionFailures = { remaining: 0 };
   const attachmentDirectory = path.join(root, "plugin-attachments");
@@ -82,6 +84,43 @@ export async function fixture(
       return { status: "accepted" };
     },
   });
+  function draftFeatures(config: AgentSessionConfig) {
+    const values = {
+      ...Reflect.get(config, "featureValues"),
+      ...config.providerOptions,
+    };
+    const features = [
+      { type: "toggle" as const, id: "test_feature", label: "Test feature" },
+      { type: "toggle" as const, id: "optional_feature", label: "Optional option" },
+    ];
+    if (path.basename(config.cwd) === "alpha") {
+      features.push({ type: "toggle", id: "project_feature", label: "Project option" });
+      if (values.project_feature === true) {
+        features.push({ type: "toggle", id: "dependent_feature", label: "Dependent option" });
+      }
+    }
+    const rejected = Object.keys(values).filter(
+      (id) => typeof values[id] !== "boolean" || !features.some((feature) => feature.id === id),
+    );
+    if (rejected.length) {
+      rejectedOptions.push(...rejected);
+      throw new Error("Test provider rejected draft options");
+    }
+    return features.map((feature) => ({ ...feature, value: values[feature.id] === true }));
+  }
+  const projectOptionAdapter = {
+    // The 0.15 stock host asks for features directly. Newer hosts use controls and option values.
+    async listFeatures(config: AgentSessionConfig) {
+      return draftFeatures(config);
+    },
+    async listControls(config: AgentSessionConfig) {
+      const features = draftFeatures(config);
+      return {
+        controls: features.map(({ type, id, label }) => ({ type, key: id, label })),
+        options: Object.fromEntries(features.map(({ id, value }) => [id, value])),
+      };
+    },
+  };
   const provider: AgentClient = {
     provider: inner.provider,
     capabilities: { ...inner.capabilities, supportsNativePaseoTools: native },
@@ -97,7 +136,19 @@ export async function fixture(
       return inner.resumeSession(handle, config, context, options);
     },
     isAvailable: () => inner.isAvailable(),
-    fetchCatalog: (options, context) => inner.fetchCatalog(options, context),
+    ...(projectOptions && projectOptionAdapter),
+    async fetchCatalog(options, context) {
+      const catalog = await inner.fetchCatalog(options, context);
+      return additionalProviders
+        ? {
+            ...catalog,
+            models: catalog.models.map((model) => ({
+              ...model,
+              thinkingOptions: [{ id: "high", label: "High" }],
+            })),
+          }
+        : catalog;
+    },
   };
   let daemon: Awaited<ReturnType<typeof createTestPaseoDaemon>> | undefined;
   let driver: DaemonClient | undefined;
@@ -108,7 +159,10 @@ export async function fixture(
     daemon = await createTestPaseoDaemon({
       daemonVersion: PASEO_VERSION,
       paseoHomeRoot: path.join(root, "home"),
-      agentClients: { codex: provider },
+      agentClients: {
+        codex: provider,
+        ...(additionalProviders && { claude: createTestAgentClient("claude") }),
+      },
       mcpEnabled: true,
       webUi: {
         enabled: true,
@@ -214,6 +268,7 @@ export async function fixture(
       rpc,
       tools,
       launches,
+      rejectedOptions,
       notifications,
       workers,
       coordinator,

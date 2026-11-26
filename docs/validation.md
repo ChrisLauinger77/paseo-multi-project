@@ -1,5 +1,11 @@
 # Validation
 
+## Per-provider agent defaults — 2026-11-26
+
+On macOS arm64 with CI-pinned Node 22.23.5 and npm 10.9.9, typecheck, lint and formatting passed against the branch's stock Paseo 0.17.5 pin. All 28 unit tests, 23 compatibility tests and seven Chromium browser tests passed. The package dry run listed 36 files. The compatibility suite loaded the packed source without development dependencies. An earlier run against Paseo 0.17.3 covered the initial defaults implementation.
+
+The three focused provider-defaults browser tests also passed in a separate stock Paseo 0.15.0 installation. Its typecheck and lint passed after removing two newer session-hook fields from an existing test fixture in that copy. Browser coverage includes desktop and compact settings, project-only options, clearing hidden child values, selective recovery when a provider rejects stale values, catalog failure recovery, conflicted saves and removals, task-only overrides, and unchanged launch retries after saved settings change.
+
 ## Release 0.1.7 preflight — 2026-11-19
 
 This release publishes the minimum-only requirement `>=0.15.0` (no upper bound), replacing v0.1.6's `>=0.15.0 <0.17.0`. The manifest, README and distributed overview agree. Since v0.1.6, the only distributed-file changes are the manifest requirement, the overview's compatibility sentence, README text and `package.json` version/development pins; plugin runtime code, data access and attachment storage/retention are unchanged. The development baseline is stock Paseo **0.16.2**. Compatibility claims rest on the evidence below: 0.15.4 for the 0.15 series, 0.16.0 and 0.16.2, and 0.17.0-beta.1.

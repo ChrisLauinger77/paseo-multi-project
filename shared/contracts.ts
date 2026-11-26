@@ -127,7 +127,7 @@ export const launchRpc = defineRpc({
 export type TaskLaunchResult = z.infer<typeof launchRpc.output>;
 export const featuresRpc = defineRpc({
   name: "features.read",
-  input: z.object({ config: agentConfigSchema, cwd: z.string() }),
+  input: z.object({ config: agentConfigSchema, cwd: z.string().optional() }),
   output: z.object({
     features: z.array(
       z.discriminatedUnion("type", [
