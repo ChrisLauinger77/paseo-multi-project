@@ -15,8 +15,10 @@ import { sessionOpenHook } from "./server/session-hook";
 import { launchTask, listTasks } from "./server/tasks";
 import { archiveTask } from "./server/archive";
 import { readCatalog, readFeatures } from "./server/catalog";
+import { agentDefaults } from "./shared/agent-defaults";
 
 export default function contribute(server: PluginServerContext) {
+  server.registerSettings(agentDefaults);
   const attachments = new AttachmentStore();
   server.handle(uploadAttachmentRpc, (input) => attachments.upload(input));
   server.handle(importAttachmentRpc, (input) => attachments.importFile(input.path, input.maxBytes));

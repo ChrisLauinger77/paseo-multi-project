@@ -1,8 +1,264 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { settingsRpc } from "@getpaseo/plugin";
 import { fixture, deferred } from "./fixture";
-import { TASK_LABEL, INPUT_LABEL, MAX_ATTACHMENT_BYTES } from "../shared/contracts";
+import {
+  TASK_LABEL,
+  INPUT_LABEL,
+  MAX_ATTACHMENT_BYTES,
+  launchSchema,
+  type TaskLaunch,
+} from "../shared/contracts";
+import { agentDefaults, type ProviderDefaults } from "../shared/agent-defaults";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+
+function configureBrowserHost(page: Page, serverId: string, endpoint: string) {
+  return page.addInitScript(
+    ({ serverId, endpoint }) => {
+      const connection = { id: "direct:" + endpoint, type: "directTcp", endpoint };
+      localStorage.setItem(
+        "@paseo:daemon-registry",
+        JSON.stringify([
+          {
+            serverId,
+            label: "Plugin test",
+            connections: [connection],
+            preferredConnectionId: connection.id,
+            createdAt: new Date(0).toISOString(),
+            updatedAt: new Date(0).toISOString(),
+          },
+        ]),
+      );
+      localStorage.setItem(
+        "@paseo:onboarding",
+        JSON.stringify({ completedAt: new Date(0).toISOString() }),
+      );
+    },
+    { serverId, endpoint },
+  );
+}
+
+for (const compact of [false, true]) {
+  test("stock browser provider defaults, compact=" + compact, async ({ page }) => {
+    const f = await fixture(false, undefined, true);
+    try {
+      await page.setViewportSize(
+        compact ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+      );
+      const serverId = f.daemon.daemon.getServerId();
+      const endpoint = "127.0.0.1:" + f.daemon.port;
+      const origin = "http://" + endpoint;
+      const settingsUrl =
+        origin + "/settings/hosts/" + serverId + "/plugins/paseo-multi-project/agent-defaults";
+      const taskUrl = origin + "/h/" + serverId + "/plugin/paseo-multi-project/surface/tasks";
+      const settings = settingsRpc(agentDefaults.id);
+      async function readDefaults() {
+        const result = settings.read.output.parse(await f.rpc(settings.read.name, {}));
+        if (result.status !== "ready") throw new Error(result.error);
+        return { revision: result.revision, ...agentDefaults.schema.parse(result.values) };
+      }
+      async function writeDefaults(providers: ProviderDefaults) {
+        const { revision } = await readDefaults();
+        const result = settings.write.output.parse(
+          await f.rpc(settings.write.name, { revision, values: { providers } }),
+        );
+        if (result.status !== "saved") throw new Error(result.error);
+        return result.revision;
+      }
+      const launchRequests: TaskLaunch[] = [];
+      const settingsReads = new Set<string>();
+      let browserRevision: string | undefined;
+      let lostReply: string | undefined;
+      await page.routeWebSocket(/\/ws(?:\?|$)/, (route) => {
+        const server = route.connectToServer();
+        route.onMessage((data) => {
+          if (data.toString().startsWith("{")) {
+            const message = findRpc(JSON.parse(data.toString()));
+            if (message?.type === "plugin.rpc.invoke.request") {
+              if (message.method === settings.read.name) settingsReads.add(message.requestId);
+              if (message.method === "tasks.launch") {
+                launchRequests.push(launchSchema.parse(message.input));
+                if (launchRequests.length === 1) lostReply = message.requestId;
+              }
+            }
+          }
+          server.send(data);
+        });
+        server.onMessage((data) => {
+          if (data.toString().startsWith("{")) {
+            const envelope = JSON.parse(data.toString());
+            const message = findRpc(envelope);
+            if (message?.type === "plugin.rpc.invoke.response") {
+              const { requestId, output } = message.payload;
+              if (settingsReads.delete(requestId)) {
+                const read = settings.read.output.parse(output);
+                if (read.status === "ready") browserRevision = read.revision;
+              }
+              if (requestId === lostReply) {
+                expect(output).toHaveProperty("agentId");
+                Object.assign(message, {
+                  type: "rpc_error",
+                  payload: { requestId, error: "Coordinator response lost" },
+                });
+                lostReply = undefined;
+                route.send(JSON.stringify(envelope));
+                return;
+              }
+            }
+          }
+          route.send(data);
+        });
+      });
+      await configureBrowserHost(page, serverId, endpoint);
+      await page.goto(settingsUrl);
+      const provider = page.getByRole("combobox", { name: "Provider", exact: true });
+      const model = page.getByRole("combobox", { name: "Model", exact: true });
+      const mode = page.getByRole("combobox", { name: "Mode", exact: true });
+      const thinking = page.getByRole("combobox", { name: "Thinking", exact: true });
+      const feature = page.getByRole("switch", { name: "Test feature" });
+      const save = page.getByRole("button", { name: "Save", exact: true });
+      const remove = page.getByRole("button", { name: "Remove saved default" });
+      await provider.selectOption("codex");
+      await mode.selectOption("full-access");
+      await thinking.selectOption("high");
+      await expect(feature).not.toBeChecked();
+      await feature.click();
+      await save.click();
+      await expect(remove).toBeVisible();
+      await provider.selectOption("claude");
+      await model.selectOption("sonnet");
+      await save.click();
+      await expect(remove).toBeVisible();
+      const { providers: saved } = await readDefaults();
+      expect(saved).toEqual({
+        codex: {
+          model: "gpt-5.4-mini",
+          modeId: "full-access",
+          thinkingOptionId: "high",
+          featureValues: { test_feature: true },
+        },
+        claude: { model: "sonnet" },
+      });
+
+      await page.reload();
+      await provider.selectOption("codex");
+      await expect(mode).toHaveValue("full-access");
+      await expect(thinking).toHaveValue("high");
+      await expect(feature).toBeChecked();
+      await mode.selectOption("auto");
+      await page.getByRole("button", { name: "Discard changes" }).click();
+      await expect(mode).toHaveValue("full-access");
+      await mode.selectOption("auto");
+      const updated = { ...saved, codex: { ...saved.codex!, modeId: "bypassPermissions" } };
+      await writeDefaults(updated);
+      await save.click();
+      await expect(page.getByRole("alert")).toContainText(/changed|conflict/i);
+      await expect(mode).toHaveValue("auto");
+      expect((await readDefaults()).providers).toEqual(updated);
+      await page.getByRole("button", { name: "Reload saved values" }).click();
+      await expect(mode).toHaveValue("bypassPermissions");
+
+      await page.goto(taskUrl);
+      await provider.selectOption("claude");
+      await expect(model).toHaveValue("sonnet");
+      await provider.selectOption("codex");
+      await page.getByTestId("multi-project-prompt").fill("Use configured agent options");
+      const project = f.request.projects[0]!;
+      await page.getByTestId("multi-project-target-" + project.projectId).click();
+      await page.getByTestId("multi-project-options-toggle").click();
+      await expect(model).toHaveValue("gpt-5.4-mini");
+      await expect(mode).toHaveValue("bypassPermissions");
+      await expect(thinking).toHaveValue("high");
+      await expect(feature).toBeChecked();
+      await feature.click();
+      const launch = page.getByTestId("multi-project-launch");
+      await launch.click();
+      await expect(page.getByTestId("multi-project-error")).toHaveText("Coordinator response lost");
+      expect((await readDefaults()).providers).toEqual(updated);
+      const newerRevision = await writeDefaults({
+        ...updated,
+        codex: { ...updated.codex!, modeId: "full-access" },
+      });
+      await expect.poll(() => browserRevision).toBe(newerRevision);
+      await expect(mode).toHaveValue("bypassPermissions");
+      await expect(feature).not.toBeChecked();
+      await launch.click();
+      await expect.poll(() => launchRequests.length).toBe(2);
+      expect(launchRequests[1]).toEqual(launchRequests[0]);
+      expect(launchRequests[1]!.config).toEqual({
+        ...updated.codex,
+        provider: "codex",
+        featureValues: { test_feature: false },
+      });
+      const agents = (await f.paseo.agents.list()).entries.filter(
+        ({ agent }) => agent.labels[TASK_LABEL] === "true",
+      );
+      expect(agents).toHaveLength(1);
+      expect(JSON.parse(agents[0]!.agent.labels[INPUT_LABEL]!).config).toEqual(
+        launchRequests[0]!.config,
+      );
+      const launched = f.launches.find((item) => item.context?.agentId === agents[0]!.agent.id);
+      expect(launched?.config).toMatchObject({
+        model: "gpt-5.4-mini",
+        modeId: "bypassPermissions",
+        thinkingOptionId: "high",
+      });
+      const options =
+        Reflect.get(launched!.config, "providerOptions") ??
+        Reflect.get(launched!.config, "featureValues");
+      expect(options).toMatchObject({ test_feature: false });
+      const prompt = await f.firstPrompt.promise;
+      const promptText =
+        typeof prompt === "string"
+          ? prompt
+          : prompt
+              .filter((block) => block.type === "text")
+              .map((block) => block.text)
+              .join("\n");
+      expect(promptText).toContain(
+        "Worker create_agent configuration (JSON):\n\n" +
+          JSON.stringify(
+            {
+              provider: "codex/gpt-5.4-mini",
+              settings: {
+                modeId: "bypassPermissions",
+                thinkingOptionId: "high",
+                features: { test_feature: false },
+              },
+              notifyOnFinish: true,
+            },
+            null,
+            2,
+          ),
+      );
+
+      await page.goto(settingsUrl);
+      await provider.selectOption("codex");
+      await remove.click();
+      await expect(remove).toHaveCount(0);
+      expect((await readDefaults()).providers).toEqual({ claude: saved.claude });
+      await page.goto(taskUrl);
+      await provider.selectOption("codex");
+      await expect(model).toHaveValue("gpt-5.4-mini");
+      await expect(page.getByTestId("multi-project-options-summary")).toHaveText(
+        "Default mode · Default thinking",
+      );
+      await writeDefaults({ codex: { model: "removed-model" }, claude: saved.claude! });
+      await page.reload();
+      await provider.selectOption("codex");
+      await page.getByTestId("multi-project-prompt").fill("Recover from stale agent options");
+      await page.getByTestId("multi-project-target-" + project.projectId).click();
+      await expect(page.getByRole("alert")).toContainText('Model "removed-model" is unavailable.');
+      await expect(launch).toBeDisabled();
+      await page.getByRole("button", { name: "Reset agent options" }).click();
+      await expect(model).toHaveValue("gpt-5.4-mini");
+      await expect(launch).toBeEnabled();
+      expect((await readDefaults()).providers.codex).toEqual({ model: "removed-model" });
+    } finally {
+      await f.close();
+    }
+  });
+}
 
 for (const observationFails of [false, true]) {
   test(`reads tasks after observation settles, observation failure=${observationFails}`, async ({
@@ -70,29 +326,7 @@ for (const observationFails of [false, true]) {
           route.send(data);
         });
       });
-      await page.addInitScript(
-        ({ serverId, endpoint }) => {
-          const connection = { id: `direct:${endpoint}`, type: "directTcp", endpoint };
-          localStorage.setItem(
-            "@paseo:daemon-registry",
-            JSON.stringify([
-              {
-                serverId,
-                label: "Plugin test",
-                connections: [connection],
-                preferredConnectionId: connection.id,
-                createdAt: new Date(0).toISOString(),
-                updatedAt: new Date(0).toISOString(),
-              },
-            ]),
-          );
-          localStorage.setItem(
-            "@paseo:onboarding",
-            JSON.stringify({ completedAt: new Date(0).toISOString() }),
-          );
-        },
-        { serverId, endpoint },
-      );
+      await configureBrowserHost(page, serverId, endpoint);
       await page.goto(`http://${endpoint}/h/${serverId}/plugin/paseo-multi-project/surface/tasks`);
       await expect(page.getByTestId("multi-project-screen")).toBeVisible();
       await expect.poll(() => Boolean(releaseObservation)).toBe(true);
@@ -182,29 +416,7 @@ for (const compact of [false, true]) {
           }
         });
       });
-      await page.addInitScript(
-        ({ serverId, endpoint }) => {
-          const connection = { id: `direct:${endpoint}`, type: "directTcp", endpoint };
-          localStorage.setItem(
-            "@paseo:daemon-registry",
-            JSON.stringify([
-              {
-                serverId,
-                label: "Plugin test",
-                connections: [connection],
-                preferredConnectionId: connection.id,
-                createdAt: new Date(0).toISOString(),
-                updatedAt: new Date(0).toISOString(),
-              },
-            ]),
-          );
-          localStorage.setItem(
-            "@paseo:onboarding",
-            JSON.stringify({ completedAt: new Date(0).toISOString() }),
-          );
-        },
-        { serverId, endpoint },
-      );
+      await configureBrowserHost(page, serverId, endpoint);
       const url = `http://${endpoint}/h/${serverId}/plugin/paseo-multi-project/surface/tasks`;
       await page.goto(url);
       await expect(page.getByTestId("multi-project-screen")).toBeVisible();

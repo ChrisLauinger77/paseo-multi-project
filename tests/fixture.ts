@@ -38,6 +38,7 @@ export function deferred<T = void>() {
 export async function fixture(
   native = false,
   pluginDirectory = fileURLToPath(new URL("../", import.meta.url)),
+  additionalProviders = false,
 ) {
   const root = await mkdtemp(path.join(tmpdir(), "paseo-multi-project-test-"));
   const workers = deferred();
@@ -97,7 +98,18 @@ export async function fixture(
       return inner.resumeSession(handle, config, context, options);
     },
     isAvailable: () => inner.isAvailable(),
-    fetchCatalog: (options, context) => inner.fetchCatalog(options, context),
+    async fetchCatalog(options, context) {
+      const catalog = await inner.fetchCatalog(options, context);
+      return additionalProviders
+        ? {
+            ...catalog,
+            models: catalog.models.map((model) => ({
+              ...model,
+              thinkingOptions: [{ id: "high", label: "High" }],
+            })),
+          }
+        : catalog;
+    },
   };
   let daemon: Awaited<ReturnType<typeof createTestPaseoDaemon>> | undefined;
   let driver: DaemonClient | undefined;
@@ -108,7 +120,10 @@ export async function fixture(
     daemon = await createTestPaseoDaemon({
       daemonVersion: PASEO_VERSION,
       paseoHomeRoot: path.join(root, "home"),
-      agentClients: { codex: provider },
+      agentClients: {
+        codex: provider,
+        ...(additionalProviders && { claude: createTestAgentClient("claude") }),
+      },
       mcpEnabled: true,
       webUi: {
         enabled: true,
