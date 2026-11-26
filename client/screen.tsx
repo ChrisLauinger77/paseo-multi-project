@@ -171,6 +171,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
     <ScrollView
       style={styles.page}
       contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
       testID="multi-project-screen"
     >
       <View style={styles.toolbar}>
@@ -185,7 +186,19 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         </Text>
       ) : null}
       <View style={styles.group}>
-        <Text style={styles.label}>Task</Text>
+        <View style={styles.toolbar}>
+          <Text style={styles.label}>Task</Text>
+          {state.task.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={state.pending}
+              onPress={() => form.setTask("")}
+              style={state.pending && styles.disabled}
+            >
+              <Text style={styles.link}>Clear description</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <TextInput
           testID="multi-project-prompt"
           accessibilityLabel="Task"
@@ -215,6 +228,7 @@ export function TaskScreen({ theme, layout, navigation }: PluginScreenProps) {
         compact={layout.compact}
         theme={theme}
         onToggle={form.toggleProject}
+        onClear={form.clearProjects}
       />
       <TaskSettings
         config={state.config}

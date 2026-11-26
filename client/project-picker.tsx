@@ -11,6 +11,7 @@ export function ProjectPicker({
   compact,
   theme,
   onToggle,
+  onClear,
 }: {
   projects: TaskProject[];
   selected: TaskProject[];
@@ -18,6 +19,7 @@ export function ProjectPicker({
   compact: boolean;
   theme: PluginScreenProps["theme"];
   onToggle(project: TaskProject): void;
+  onClear(): void;
 }) {
   const [search, setSearch] = useState("");
   const [selectedOnly, setSelectedOnly] = useState(false);
@@ -50,23 +52,49 @@ export function ProjectPicker({
         >
           <Text style={{ color: colors.accent }}>{selectedOnly ? "✓ " : ""}Selected only</Text>
         </Pressable>
+        {selected.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={pending}
+            onPress={() => {
+              onClear();
+              setSelectedOnly(false);
+            }}
+            style={{ paddingVertical: 6, opacity: pending ? 0.5 : 1 }}
+          >
+            <Text style={{ color: colors.accent }}>Clear selection</Text>
+          </Pressable>
+        ) : null}
       </View>
-      <TextInput
-        accessibilityLabel="Search projects"
-        testID="multi-project-project-search"
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Search projects by name or path"
-        placeholderTextColor={colors.foregroundMuted}
-        style={{
-          color: colors.foreground,
-          backgroundColor: colors.surface1,
-          borderColor: colors.border,
-          borderWidth: 1,
-          borderRadius: 8,
-          padding: 10,
-        }}
-      />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <TextInput
+          accessibilityLabel="Search projects"
+          testID="multi-project-project-search"
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search projects by name or path"
+          placeholderTextColor={colors.foregroundMuted}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            color: colors.foreground,
+            backgroundColor: colors.surface1,
+            borderColor: colors.border,
+            borderWidth: 1,
+            borderRadius: 8,
+            padding: 10,
+          }}
+        />
+        {search.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setSearch("")}
+            style={{ paddingVertical: 10 }}
+          >
+            <Text style={{ color: colors.accent }}>Clear search</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <ScrollView
         testID="multi-project-projects"
         nestedScrollEnabled
